@@ -188,18 +188,23 @@ export default function AppShell() {
   const [isReset, setIsReset] = useState(false);
 
   useEffect(() => {
-    // Check initial session
+    // Check if this is a password recovery redirect (token in URL hash)
+    const hash = window.location.hash;
+    if (hash && hash.includes("type=recovery")) {
+      setIsReset(true);
+    }
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
       setLoading(false);
     });
 
-    // Listen for auth state changes — including PASSWORD_RECOVERY
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "PASSWORD_RECOVERY") {
-        // User clicked reset link in email — show the reset form
         setIsReset(true);
         setUser(session?.user ?? null);
+      } else if (event === "SIGNED_IN" && isReset) {
+        // stay on reset screen, don't redirect to app
       } else {
         setIsReset(false);
         setUser(session?.user ?? null);
