@@ -401,7 +401,6 @@ export default function DayWheel({userId,onSignOut}){
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link href="https://fonts.googleapis.com/css2?family=Sacramento&family=Montserrat:wght@900&display=swap" rel="stylesheet" />
     <div style={{ minHeight:"100vh", background:`radial-gradient(ellipse at 20% -10%,#faf7f0 0%,transparent 55%),radial-gradient(ellipse at 90% 110%,#f0ebe0 0%,transparent 50%),${C.bg}`, color:C.ink, fontFamily:"Inter,system-ui,sans-serif", WebkitFontSmoothing:"antialiased" }}>
-      <div style={{background:"red",color:"white",fontSize:24,padding:10,textAlign:"center"}}>V5 - {new Date().toLocaleTimeString()}</div>
       <style>{`
   html,body{margin:0;padding:0;background:#f5f1ea;}
   #root{min-height:100vh;background:#f5f1ea;}
