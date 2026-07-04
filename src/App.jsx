@@ -186,12 +186,13 @@ export default function AppShell() {
   const [user, setUser]       = useState(null);
   const [loading, setLoading] = useState(true);
   const [isReset, setIsReset] = useState(false);
+  const isResetRef = useRef(false);
 
   useEffect(() => {
-    // Check if this is a password recovery redirect (token in URL hash)
     const hash = window.location.hash;
     if (hash && hash.includes("type=recovery")) {
       setIsReset(true);
+      isResetRef.current = true;
     }
 
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -201,11 +202,14 @@ export default function AppShell() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "PASSWORD_RECOVERY") {
+        isResetRef.current = true;
         setIsReset(true);
         setUser(session?.user ?? null);
-      } else if (event === "SIGNED_IN" && isReset) {
-        // stay on reset screen, don't redirect to app
+      } else if (event === "SIGNED_IN" && isResetRef.current) {
+        // stay on reset screen — ignore this sign-in
+        setUser(session?.user ?? null);
       } else {
+        isResetRef.current = false;
         setIsReset(false);
         setUser(session?.user ?? null);
       }
@@ -216,10 +220,10 @@ export default function AppShell() {
 
   if (loading) return <LoadingScreen />;
 
-  // Show reset form if user came via password reset link
   if (isReset) return (
     <ResetPasswordScreen onDone={() => {
       supabase.auth.signOut();
+      isResetRef.current = false;
       setIsReset(false);
       setUser(null);
     }} />
