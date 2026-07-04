@@ -352,19 +352,6 @@ function LoadingScreen(){
   );
 }
 
-export default function AppShell() {
-  const[user,setUser]=useState(null);
-  const[loading,setLoading]=useState(true);
-  useEffect(()=>{
-    supabase.auth.getSession().then(({data:{session}})=>{setUser(session?.user??null);setLoading(false);});
-    const{data:{subscription}}=supabase.auth.onAuthStateChange((_,session)=>{setUser(session?.user??null);});
-    return()=>subscription.unsubscribe();
-  },[]);
-  if(loading)return<LoadingScreen/>;
-  if(!user)return<AuthScreen onAuth={setUser}/>;
-  return<App userId={user.id} onSignOut={()=>supabase.auth.signOut()}/>;
-}
-
 function App({userId,onSignOut}){
   const now=useNow();
   const[dataLoading,setDataLoading]=useState(true);
