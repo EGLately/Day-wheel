@@ -471,7 +471,63 @@ function App({userId,onSignOut}){
   function updateCat(id,patch){setCats(c=>({...c,[id]:{...c[id],...patch}}));}
   function deleteCat(id){const inUse=Object.values(templates).some(t=>t.schedule.some(s=>s.cat===id));if(inUse){alert("Can't delete - category is in use.");return;}setCats(c=>{const n={...c};delete n[id];return n;});}
   function setGoal(catId,mins){updWC(wc=>({...wc,goals:{...(wc.goals||{}),[catId]:mins}}));}
-  function setWakeTime(mins){updWC(wc=>({...wc,wakeTime:mins}));}
+  function setWakeTime(mins) {
+  updWC(wc => {
+    const oldWake = wc.wakeTime ?? 360;
+    const delta = mins - oldWake;
+    if (delta === 0) return { ...wc, wakeTime: mins };
+
+    const wr = wc.wakeRoutine ?? 30;
+    const br = wc.bedRoutine ?? 30;
+    const sleepDur = (wc.goals?.sleep && wc.goals.sleep > 0) ? wc.goals.sleep : 480;
+    const sleepStart = ((mins - sleepDur) + 1440) % 1440;
+    const newWakeEnd = (mins + wr) % 1440;
+    const bedStart = ((sleepStart - br) + 1440) % 1440;
+
+    function norm(m) {
+      const mm = ((m % 1440) + 1440) % 1440;
+      return mm >= oldWake ? mm : mm + 1440;  // use oldWake not mins
+    }
+
+    const moveable = (wc.schedule ?? [])
+      .filter(x => !x.isSleep && !x.isRoutine && (!x.mealKey || (wc.meals ?? {})[x.mealKey]))
+      .sort((a, b) => norm(a.startMin) - norm(b.startMin));
+
+
+    const TOUCH = 2;
+    const chain = [];
+    for (let k = 0; k < moveable.length; k++) {
+      const prevEnd = chain.length === 0
+        ? norm(newWakeEnd)
+        : norm(chain[chain.length - 1].startMin) + chain[chain.length - 1].duration;
+      const gap = norm(moveable[k].startMin) - prevEnd;
+      if (gap <= TOUCH) chain.push(moveable[k]);
+      else break;
+    }
+
+    if (chain.length === 0) return { ...wc, wakeTime: mins };
+
+    const chainEnd = norm(chain[chain.length - 1].startMin) + chain[chain.length - 1].duration;
+    const chainStart = norm(chain[0].startMin);
+    const bedBoundary = norm(br > 0 ? bedStart : sleepStart);
+    const wakeBoundary = norm(newWakeEnd);
+
+    const actualDelta = delta > 0
+      ? Math.min(delta, bedBoundary - chainEnd)
+      : Math.max(delta, wakeBoundary - chainStart);
+
+    if (actualDelta === 0) return { ...wc, wakeTime: mins };
+
+    const chainIds = new Set(chain.map(x => x.id));
+    const newSchedule = (wc.schedule ?? []).map(x =>
+      chainIds.has(x.id)
+        ? { ...x, startMin: ((x.startMin + actualDelta) + 1440) % 1440 }
+        : x
+    );
+
+    return { ...wc, wakeTime: mins, schedule: newSchedule };
+  });
+}
   function setWakeRoutine(mins){updWC(wc=>({...wc,wakeRoutine:mins}));}
   function setBedRoutine(mins){updWC(wc=>({...wc,bedRoutine:mins}));}
   function updateRoutineSubs(routineId,subs){const key=routineId==="__wake_routine__"?"wakeRoutineSubs":"bedRoutineSubs";const durKey=routineId==="__wake_routine__"?"wakeRoutine":"bedRoutine";const total=subs.reduce((s,x)=>s+x.duration,0);updWC(wc=>({...wc,[key]:subs,[durKey]:Math.max(MIN_DUR,total)}));}
@@ -486,7 +542,70 @@ function App({userId,onSignOut}){
   function deleteTpl(id){if(templates[id]?.builtIn)return;setTemplates(t=>{const n={...t};delete n[id];return n;});setOverrideId(null);setOverrideDate(null);setSelectedId(null);}
   function updateField(id,patch){if(id==="__wake_routine__"||id==="__bed_routine__"){updWC(wc=>({...wc,routineOverrides:{...(wc.routineOverrides||{}),[id]:{...(wc.routineOverrides?.[id]||{}),...patch}}}));return;}upd(s=>s.map(x=>x.id===id?{...x,...patch}:x));}
   function changeDur(id,newDur){upd(s=>{const i=s.findIndex(x=>x.id===id);if(i<0)return s;const cur=s[i];if(newDur<MIN_DUR)return s;if(wouldOverlap(s,wakeTime,sleepGoal,id,cur.startMin??wakeTime,newDur,wakeRoutine,bedRoutine,meals))return s;return s.map((x,j)=>j===i?{...x,duration:newDur}:x);});}
-  function changeStart(id,newStartMin){upd(s=>{const i=s.findIndex(x=>x.id===id);if(i<0)return s;const cur=s[i];const snapped=Math.round(newStartMin/15)*15;if(wouldOverlap(s,wakeTime,sleepGoal,id,snapped,cur.duration,wakeRoutine,bedRoutine,meals))return s;return s.map((x,j)=>j===i?{...x,startMin:snapped}:x);});}
+  function changeStart(id, newStartMin) {
+  upd(s => {
+    const i = s.findIndex(x => x.id === id);
+    if (i < 0) return s;
+    const cur = s[i];
+    const snapped = Math.round(newStartMin / 15) * 15;
+
+    // Calculate signed delta (-720 to +720)
+    let delta = ((snapped - cur.startMin) + 1440) % 1440;
+    if (delta > 720) delta -= 1440;
+    if (delta === 0) return s;
+
+    const sleepDur = (sleepGoal && sleepGoal > 0) ? sleepGoal : 480;
+    const sleepStart = ((wakeTime - sleepDur) + 1440) % 1440;
+    const wakeEnd = (wakeTime + wakeRoutine) % 1440;
+    const bedStart = ((sleepStart - bedRoutine) + 1440) % 1440;
+
+    function norm(m) { const mm = ((m % 1440) + 1440) % 1440; return mm >= wakeTime ? mm : mm + 1440; }
+
+    // Sort moveable slices
+    const moveable = s.filter(x => !x.isSleep && !x.isRoutine && (!x.mealKey || meals[x.mealKey]));
+    const sorted = [...moveable].sort((a, b) => norm(a.startMin) - norm(b.startMin));
+    const di = sorted.findIndex(x => x.id === id);
+    if (di < 0) return s;
+
+    // Build contiguous chain in drag direction
+    const TOUCH = 2;
+    const chain = [sorted[di]];
+    if (delta > 0) {
+      for (let k = di + 1; k < sorted.length; k++) {
+        const prev = chain[chain.length - 1];
+        if (norm(sorted[k].startMin) - (norm(prev.startMin) + prev.duration) <= TOUCH) chain.push(sorted[k]);
+        else break;
+      }
+    } else {
+      for (let k = di - 1; k >= 0; k--) {
+        const next = chain[0];
+        if (norm(next.startMin) - (norm(sorted[k].startMin) + sorted[k].duration) <= TOUCH) chain.unshift(sorted[k]);
+        else break;
+      }
+    }
+
+    const chainIds = new Set(chain.map(x => x.id));
+    const chainStart = norm(chain[0].startMin);
+    const chainEnd = norm(chain[chain.length - 1].startMin) + chain[chain.length - 1].duration;
+
+    // Find boundary in drag direction
+    let actualDelta;
+    if (delta > 0) {
+      const nextSlice = sorted.filter(x => !chainIds.has(x.id) && norm(x.startMin) >= chainEnd)
+        .sort((a, b) => norm(a.startMin) - norm(b.startMin))[0];
+      const boundary = nextSlice ? norm(nextSlice.startMin) : norm(bedRoutine > 0 ? bedStart : sleepStart);
+      actualDelta = Math.min(delta, boundary - chainEnd);
+    } else {
+      const prevSlice = sorted.filter(x => !chainIds.has(x.id) && norm(x.startMin) + x.duration <= chainStart)
+        .sort((a, b) => norm(b.startMin) - norm(a.startMin))[0];
+      const boundary = prevSlice ? norm(prevSlice.startMin) + prevSlice.duration : norm(wakeRoutine > 0 ? wakeEnd : wakeTime);
+      actualDelta = Math.max(delta, boundary - chainStart);
+    }
+
+    if (actualDelta === 0) return s;
+    return s.map(x => chainIds.has(x.id) ? { ...x, startMin: ((x.startMin + actualDelta) + 1440) % 1440 } : x);
+  });
+}
   function deleteAct(id){upd(s=>{if(s[s.findIndex(x=>x.id===id)]?.isSleep)return s;const arr=s.filter(x=>x.id!==id);setSelectedId(arr[0]?.id??null);return arr;});}
   function insertAfter(id){upd(s=>{const i=s.findIndex(x=>x.id===id);if(i<0)return s;const cur=s[i];if(cur.isSleep)return s;const curStart=cur.startMin??wakeTime;const newStart=(curStart+cur.duration)%1440;const newDur=60;const newId=nid();if(!wouldOverlap(s,wakeTime,sleepGoal,null,newStart,newDur,wakeRoutine,bedRoutine,meals)){setSelectedId(newId);return[...s,{id:newId,label:"New activity",cat:cur.cat,duration:newDur,startMin:newStart}];}const sd2=(sleepGoal&&sleepGoal>0)?sleepGoal:480;for(let t=wakeTime;t<wakeTime+(1440-sd2)-newDur;t+=15){const ts=t%1440;if(!wouldOverlap(s,wakeTime,sleepGoal,null,ts,newDur,wakeRoutine,bedRoutine,meals)){setSelectedId(newId);return[...s,{id:newId,label:"New activity",cat:cur.cat,duration:newDur,startMin:ts}];}}return s;});}
   function addAt(clockMin){upd(s=>{const dd=60;const snapped=Math.round(clockMin/15)*15;if(wouldOverlap(s,wakeTime,sleepGoal,null,snapped,dd,wakeRoutine,bedRoutine,meals)){for(let dur=dd;dur>=MIN_DUR;dur-=15){if(!wouldOverlap(s,wakeTime,sleepGoal,null,snapped,dur,wakeRoutine,bedRoutine,meals)){const newId=nid();const lc=s.filter(x=>!x.isSleep).slice(-1)[0]?.cat??"misc";setSelectedId(newId);return[...s,{id:newId,label:"New activity",cat:lc,duration:dur,startMin:snapped}];}}return s;}const newId=nid();const lc=s.filter(x=>!x.isSleep).slice(-1)[0]?.cat??"misc";setSelectedId(newId);return[...s,{id:newId,label:"New activity",cat:lc,duration:dd,startMin:snapped}];});}
@@ -506,7 +625,7 @@ function App({userId,onSignOut}){
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link href="https://fonts.googleapis.com/css2?family=Sacramento&family=Montserrat:wght@900&display=swap" rel="stylesheet" />
     <div style={{ minHeight:"100vh", background:`radial-gradient(ellipse at 20% -10%,#faf7f0 0%,transparent 55%),radial-gradient(ellipse at 90% 110%,#f0ebe0 0%,transparent 50%),${C.bg}`, color:C.ink, fontFamily:"Inter,system-ui,sans-serif", WebkitFontSmoothing:"antialiased" }}>
-      <div style={{background:"red",color:"white",fontSize:24,padding:10,textAlign:"center"}}>V4 - {new Date().toLocaleTimeString()}</div>
+      <div style={{background:"red",color:"white",fontSize:24,padding:10,textAlign:"center"}}>V5 - {new Date().toLocaleTimeString()}</div>
       <style>{`
   html,body{margin:0;padding:0;background:#f5f1ea;}
   #root{min-height:100vh;background:#f5f1ea;}
