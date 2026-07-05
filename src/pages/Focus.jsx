@@ -898,12 +898,14 @@ export default function Focus(){
   return(
     <div style={{minHeight:"100vh",background:C.bg,...sans,color:C.ink}} onClick={e=>{if(quickAdd&&!e.target.closest("[data-quickadd]"))setQuickAdd(false);}}>
       <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet"/>
-      <div style={{borderBottom:`1px solid ${C.line}`,padding:"16px 20px",background:C.white,display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
+      <div style={{borderBottom:`1px solid ${C.line}`,padding:"16px 20px",background:C.white,display:"grid",gridTemplateColumns:"auto 1fr auto",alignItems:"center",gap:10}}>
         <div><div style={{...serifI,fontSize:32,color:C.ink,lineHeight:1}}>Focus</div><div style={{fontSize:12,color:C.muted,marginTop:3}}>{allActions.filter(x=>x.status!=="complete").length} open · {openToday} do today</div></div>
-        <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+        <div style={{display:"flex",justifyContent:"center",width:"100%"}}>
           <div style={{display:"flex",border:`1px solid ${C.line}`,borderRadius:8,overflow:"hidden"}}>
             {[{key:"dashboard",label:"Today"},{key:"inbox",label:"Inbox"},{key:"plan",label:"◈ Plan"},{key:"do",label:"○ Do"}].map((v,i,arr)=><button key={v.key} onClick={()=>setView(v.key)} style={{padding:"7px 18px",fontSize:12,border:"none",cursor:"pointer",...sans,background:view===v.key?C.ink:"transparent",color:view===v.key?C.white:C.ink2,borderRight:i<arr.length-1?`1px solid ${C.line}`:"none"}}>{v.key==="inbox"?<>{v.label}{inboxItems.length>0&&<span style={{marginLeft:5,background:C.accent,color:C.white,borderRadius:999,fontSize:9,padding:"1px 5px",...mono}}>{inboxItems.length}</span>}</>:v.label}</button>)}
           </div>
+        </div>
+        <div style={{display:"flex",gap:8,alignItems:"center",justifyContent:"flex-end",flexWrap:"wrap"}}>
           <button onClick={()=>setSettingsOpen(true)} style={{background:"transparent",border:`1px solid ${C.line}`,color:C.muted,borderRadius:8,padding:"8px 12px",fontSize:14,cursor:"pointer",...sans}}>⚙</button>
           <div style={{position:"relative"}} data-quickadd="1">
             <button onClick={()=>{setQuickAdd(v=>!v);setQuickText("");}} style={{background:C.ink,color:C.white,border:"none",borderRadius:8,padding:"8px 18px",fontSize:13,cursor:"pointer",...sans,fontWeight:600}}>+ Add</button>
