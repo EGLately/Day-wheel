@@ -198,34 +198,35 @@ function NavBar({ onSignOut }) {
   return (
     <div style={{
       position:"fixed", top:0, left:0, right:0, zIndex:100,
-      display:"flex", alignItems:"center", justifyContent:"center", gap:8,
       padding:"10px 16px", background:"rgba(251,249,244,0.92)", backdropFilter:"blur(6px)",
       borderBottom:`1px solid ${C2.line}`,
     }}>
-      <Link to="/" style={{
-        textDecoration:"none", fontFamily:"Inter,system-ui,sans-serif", fontSize:12, fontWeight:600,
-        padding:"6px 16px", borderRadius:999,
-        background: isWheel ? C2.ink : "transparent",
-        color: isWheel ? C2.white : C2.muted,
-        border:`1px solid ${isWheel ? C2.ink : C2.line}`,
-      }}>
-        ◐ Day Wheel
-      </Link>
-      <Link to="/focus" style={{
-        textDecoration:"none", fontFamily:"Inter,system-ui,sans-serif", fontSize:12, fontWeight:600,
-        padding:"6px 16px", borderRadius:999,
-        background: isFocus ? C2.ink : "transparent",
-        color: isFocus ? C2.white : C2.muted,
-        border:`1px solid ${isFocus ? C2.ink : C2.line}`,
-      }}>
-        ◈ Focus
-      </Link>
-      <button onClick={onSignOut} style={{
-        marginLeft:12, background:"transparent", border:`1px solid ${C2.line}`, color:C2.muted,
-        padding:"6px 12px", borderRadius:999, fontSize:11, cursor:"pointer", fontFamily:"Inter,system-ui,sans-serif",
-      }}>
-        Sign out
-      </button>
+      <div style={{ width:"100%", maxWidth:990, margin:"0 auto", display:"flex", justifyContent:"flex-end", alignItems:"center", gap:8 }}>
+        <Link to="/" style={{
+          textDecoration:"none", fontFamily:"Inter,system-ui,sans-serif", fontSize:12, fontWeight:600,
+          padding:"6px 16px", borderRadius:999,
+          background: isWheel ? C2.ink : "transparent",
+          color: isWheel ? C2.white : C2.muted,
+          border:`1px solid ${isWheel ? C2.ink : C2.line}`,
+        }}>
+          ◐ Day Wheel
+        </Link>
+        <Link to="/focus" style={{
+          textDecoration:"none", fontFamily:"Inter,system-ui,sans-serif", fontSize:12, fontWeight:600,
+          padding:"6px 16px", borderRadius:999,
+          background: isFocus ? C2.ink : "transparent",
+          color: isFocus ? C2.white : C2.muted,
+          border:`1px solid ${isFocus ? C2.ink : C2.line}`,
+        }}>
+          ◈ Focus
+        </Link>
+        <button onClick={onSignOut} style={{
+          background:"transparent", border:`1px solid ${C2.line}`, color:C2.muted,
+          padding:"6px 12px", borderRadius:999, fontSize:11, cursor:"pointer", fontFamily:"Inter,system-ui,sans-serif",
+        }}>
+          Sign out
+        </button>
+      </div>
     </div>
   );
 }
