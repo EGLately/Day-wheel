@@ -128,7 +128,7 @@ function LoadingScreen(){
   );
 }
 
-export default function DayWheel({userId,onSignOut}){
+export default function DayWheel({userId,onSignOut,onGoToFocus}){
   const now=useNow();
   const[dataLoading,setDataLoading]=useState(true);
   const[cats,setCats]=useState(DEFAULT_CATS);
@@ -466,7 +466,7 @@ export default function DayWheel({userId,onSignOut}){
         </aside>
 
         <main style={{display:"grid",justifyItems:"start",alignItems:"start",minHeight:"min(800px,88vh)",position:"relative"}}>
-          <Wheel ranged={ranged} selectedId={selectedId} setSelectedId={setSelectedId} hoveredId={hoveredId} setHoveredId={setHoveredId} liveHour={liveHour} current={current} cats={cats} onAddAt={addAt} onChangeStart={changeStart} wakeRoutineSubs={wakeRoutineSubs} bedRoutineSubs={bedRoutineSubs} checklist={checklist} tomorrowIds={tomorrowIds} onShowFocusTasks={()=>setShowFocusTasks(true)} />
+          <Wheel ranged={ranged} selectedId={selectedId} setSelectedId={setSelectedId} hoveredId={hoveredId} setHoveredId={setHoveredId} liveHour={liveHour} current={current} cats={cats} onAddAt={addAt} onChangeStart={changeStart} wakeRoutineSubs={wakeRoutineSubs} bedRoutineSubs={bedRoutineSubs} checklist={checklist} tomorrowIds={tomorrowIds} onShowFocusTasks={onGoToFocus} />
         </main>
 
         {showRightPanel&&<aside className="dw-right-panel" style={{display:"flex",flexDirection:"column",gap:14,position:"relative"}}>
