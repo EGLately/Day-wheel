@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { supabase } from "../supabase";
 
 const C = { bg:"#f5f1ea", bg2:"#ebe5d9", white:"#fbf9f4", ink:"#181614", ink2:"#4a443c", muted:"#8b8378", line:"#d9d2c2", line2:"#c4bba8", accent:"#c9a84c", green:"#5a8a4a", red:"#a04040" };
 const serif  = { fontFamily:"'Georgia','Times New Roman',serif" };
@@ -6,14 +7,14 @@ const serifI = { fontFamily:"'Georgia','Times New Roman',serif", fontStyle:"ital
 const mono   = { fontFamily:"'JetBrains Mono',ui-monospace,monospace" };
 const sans   = { fontFamily:"Inter,system-ui,sans-serif" };
 
-function EditableText({text,onSave,style,children}){
+function EditableText({text,onSave,style,children,onClick}){
   const [editing,setEditing]=useState(false);
   const [val,setVal]=useState(text||"");
   useEffect(()=>setVal(text||""),[text]);
   return editing?(
     <input autoFocus value={val} onChange={e=>setVal(e.target.value)} onBlur={()=>{setEditing(false);const t=(val||"").trim();if(t!==text&&t.length>0)onSave&&onSave(t);}} onKeyDown={e=>{if(e.key==="Enter"){e.currentTarget.blur();} if(e.key==="Escape"){setVal(text||"");setEditing(false);}}} style={{fontSize:14,padding:"4px 6px",borderRadius:6,border:`1px solid ${C.line}`,...style}} />
   ):(
-    <span onClick={()=>setEditing(true)} style={{...style, cursor:"text"}}>
+    <span onClick={(e)=>{if(onClick){e.stopPropagation();onClick();}else{setEditing(true);}}} style={{...style, cursor:onClick?"pointer":"text"}}>
       {children}
       {text}
     </span>
@@ -27,7 +28,9 @@ const STATUSES = [
   { key:"on_hold",    label:"On Hold",    color:"#b07030" },
   { key:"complete",   label:"Complete",   color:"#4a6fa5" },
 ];
+const INBOX_CONTEXT_KEY = "inbox";
 const DEFAULT_CONTEXTS = [
+  { key:INBOX_CONTEXT_KEY, label:"Inbox", color:"#c9a84c" },
   { key:"errand",   label:"Errand",   color:"#b07030" },
   { key:"together", label:"Together", color:"#7a6fa0" },
   { key:"him",      label:"Him",      color:"#6a9ea0" },
@@ -44,6 +47,15 @@ const PRIORITIES = [
 ];
 const SIZES = [{ key:"small",label:"S" },{ key:"medium",label:"M" },{ key:"large",label:"L" }];
 
+async function loadFocusData(userId) {
+  const { data, error } = await supabase.from("user_data").select("focus_data").eq("user_id", userId).single();
+  if (error && error.code !== "PGRST116") console.error("Focus load error:", error);
+  return data?.focus_data ?? null;
+}
+async function saveFocusData(userId, payload) {
+  const { error } = await supabase.from("user_data").upsert({ user_id: userId, focus_data: payload, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
+  if (error) console.error("Focus save error:", error);
+}
 function nid() { return `i${Date.now()}_${Math.random().toString(36).slice(2,6)}`; }
 function todayS() { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; }
 function fmtDate(d) { if(!d)return null; const[y,m,day]=d.split("-"); return `${parseInt(m)}/${parseInt(day)}/${y.slice(2)}`; }
@@ -185,7 +197,8 @@ const SEED = [
   { id:"a7", type:"task", title:"Call contractor re: timeline", description:"", status:"actionable", contexts:["call"], parentId:"m1", dueDate:"2026-06-15", doDate:todayS(), priority:"high", size:"small", waitingFor:"", subtasks:[] },
 ];
 
-function getChildren(items,pid){return items.filter(x=>x.parentId===pid);}
+function getChildren(items,pid){return items.filter(x=>x.parentId===pid&&!isInboxItem(x));}
+function isInboxItem(item){return item?.type==="task"&&Array.isArray(item.contexts)&&item.contexts.includes(INBOX_CONTEXT_KEY);}
 function getDescendants(items,id){const ch=getChildren(items,id);return ch.flatMap(c=>[c,...getDescendants(items,c.id)]);}
 function getActions(items,id){return getDescendants(items,id).filter(x=>x.type==="task");}
 function progressOf(items,id){const a=getActions(items,id);if(!a.length)return null;return Math.round(a.filter(x=>x.status==="complete").length/a.length*100);}
@@ -440,7 +453,7 @@ function TaskCardBody({item,allContexts,allStatuses,onEdit,onUpdate,onJumpTo,par
           <button onClick={()=>toggle("priority")} style={{...mono,fontSize:10,fontWeight:700,cursor:"pointer",border:`1px solid ${pri?`${pri.color}50`:C.line}`,borderRadius:5,padding:"0px 5px",lineHeight:"20px",background:pri?`${pri.color}18`:C.bg2,color:pri?pri.color:C.muted,verticalAlign:"baseline"}}>{pri?pri.label:"·"}</button>
           {openPop==="priority"&&<Popup>{PRIORITIES.map(p=><PopBtn key={p.key} label={p.label} active={item.priority===p.key} color={p.color} onClick={()=>{onUpdate(item.id,{priority:p.key});setOpenPop(null);}}/>)}<PopBtn label="— none" active={!item.priority} color={C.muted} onClick={()=>{onUpdate(item.id,{priority:null});setOpenPop(null);}}/></Popup>}
         </div>
-        <EditableText text={item.title} onSave={t=>onUpdate&&onUpdate(item.id,{title:t})} style={{...serif,fontSize:14,color:item.linked?C.muted:isDone?C.muted:C.ink,fontStyle:item.linked?"italic":"normal",textDecoration:isDone?"line-through":"none",flex:1}}>
+        <EditableText text={item.title} onSave={t=>onUpdate&&onUpdate(item.id,{title:t})} onClick={()=>onEdit&&onEdit(item)} style={{...serif,fontSize:14,color:item.linked?C.muted:isDone?C.muted:C.ink,fontStyle:item.linked?"italic":"normal",textDecoration:isDone?"line-through":"none",flex:1}}>
           {item.recurrence&&<span title={item.linked?"Projected — will shift until locked in":"Recurring"} style={{fontSize:11,marginRight:4,opacity:item.linked?0.6:1}}>{item.linked?"⤳":"🔁"}</span>}
         </EditableText>
       </div>
@@ -486,16 +499,15 @@ function ActionRow({item,items,allContexts,allStatuses,onEdit,onToggleStatus,onU
   const grandparent=parent?items.find(x=>x.id===parent.parentId):null;
   const isDone=item.status==="complete";
   return(
-    <div style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 12px",background:item.linked?C.bg:C.white,border:`1px ${item.linked?"dashed":"solid"} ${C.line}`,borderRadius:10,opacity:isDone?0.6:item.linked?0.75:1,position:"relative"}}>
-      <button onClick={()=>onToggleStatus(item.id)} style={{width:18,height:18,borderRadius:4,flexShrink:0,marginTop:3,cursor:"pointer",padding:0,border:`2px solid ${isDone?C.green:C.line2}`,background:isDone?C.green:"transparent",display:"flex",alignItems:"center",justifyContent:"center"}}>{isDone&&<span style={{color:"#fff",fontSize:10}}>✓</span>}</button>
+    <div onClick={()=>onEdit&&onEdit(item)} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 12px",background:item.linked?C.bg:C.white,border:`1px ${item.linked?"dashed":"solid"} ${C.line}`,borderRadius:10,opacity:isDone?0.6:item.linked?0.75:1,position:"relative",cursor:"pointer"}}>
+      <button onClick={(e)=>{e.stopPropagation();onToggleStatus(item.id);}} style={{width:18,height:18,borderRadius:4,flexShrink:0,marginTop:3,cursor:"pointer",padding:0,border:`2px solid ${isDone?C.green:C.line2}`,background:isDone?C.green:"transparent",display:"flex",alignItems:"center",justifyContent:"center"}}>{isDone&&<span style={{color:"#fff",fontSize:10}}>✓</span>}</button>
       <TaskCardBody item={item} allContexts={allContexts} allStatuses={allStatuses} onEdit={onEdit} onUpdate={onUpdate} onJumpTo={onJumpTo} parent={parent} grandparent={grandparent} onToggleSubtask={onToggleSubtask}/>
-      <button onClick={()=>onEdit(item)} style={{background:"transparent",border:"none",color:C.muted,cursor:"pointer",fontSize:13,padding:0,marginTop:2}}>✎</button>
     </div>
   );
 }
 
 // ── TreeItem (Plan view) — now uses same card body as ActionRow ─────────────
-function TreeItem({item,items,allContexts,allStatuses,depth,onEdit,onAdd,onDelete,onToggleSubtask,expanded,onToggleExpand,onEditDoDate,onUpdate,onJumpTo}){
+function TreeItem({item,items,allContexts,allStatuses,depth,onEdit,onAdd,onDelete,onToggleSubtask,expanded,onToggleExpand,onEditDoDate,onUpdate,onJumpTo,onOpenProject}){
   const children=getChildren(items,item.id);
   const isExpanded=expanded.has(item.id);
   const isProject=item.type==="project";
@@ -506,12 +518,12 @@ function TreeItem({item,items,allContexts,allStatuses,depth,onEdit,onAdd,onDelet
   if(isProject){
     return(
       <div>
-        <div style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 12px",background:C.white,border:`1px solid ${C.line}`,borderRadius:10,marginLeft:depth*18}}>
-          <button onClick={()=>children.length&&onToggleExpand(item.id)} style={{width:18,height:18,flexShrink:0,marginTop:3,fontSize:12,color:C.muted,background:"transparent",border:"none",cursor:children.length?"pointer":"default",padding:0,display:"flex",alignItems:"center",justifyContent:"center"}}>{children.length?(isExpanded?"▾":"▸"):"◈"}</button>
+        <div onClick={()=>item.type==="project"?onOpenProject?.(item):onEdit?.(item)} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 12px",background:C.white,border:`1px solid ${C.line}`,borderRadius:10,marginLeft:depth*18,cursor:"pointer"}}>
+          <button onClick={(e)=>{e.stopPropagation();children.length&&onToggleExpand(item.id);}} style={{width:18,height:18,flexShrink:0,marginTop:3,fontSize:12,color:C.muted,background:"transparent",border:"none",cursor:children.length?"pointer":"default",padding:0,display:"flex",alignItems:"center",justifyContent:"center"}}>{children.length?(isExpanded?"▾":"▸"):"◈"}</button>
           <div style={{flex:1,minWidth:0}}>
             {/* Row 1: title (no priority pill for projects) */}
             <div style={{display:"flex",alignItems:"baseline",gap:6}}>
-              <EditableText text={item.title} onSave={t=>onUpdate?onUpdate(item.id,{title:t}):onEdit&&onEdit({...item,title:t})} style={{...serif,fontSize:14,color:C.ink,flex:1}}>
+              <EditableText text={item.title} onSave={t=>onUpdate?onUpdate(item.id,{title:t}):onEdit&&onEdit({...item,title:t})} onClick={()=>onOpenProject?.(item)} style={{...serif,fontSize:14,color:C.ink,flex:1}}>
                 <span style={{fontSize:11,marginRight:4,opacity:0.7}}>◈</span>
               </EditableText>
             </div>
@@ -520,7 +532,7 @@ function TreeItem({item,items,allContexts,allStatuses,depth,onEdit,onAdd,onDelet
             <div style={{paddingLeft:18,marginTop:1}}>
               {item.description&&<div style={{...mono,fontSize:9,color:C.muted,lineHeight:1.4,marginBottom:3}}>{item.description}</div>}
               <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:3}}>
-                <button onClick={()=>onEditDoDate(item)} style={{...mono,fontSize:10,cursor:"pointer",background:"transparent",border:"none",padding:0,color:C.muted,lineHeight:1}}>{item.doDate?`do ${fmtDate(item.doDate)}`:rolledDo?`do↑ ${fmtDate(rolledDo)}`:"set do"}</button>
+                <button onClick={(e)=>{e.stopPropagation();onEditDoDate(item);}} style={{...mono,fontSize:10,cursor:"pointer",background:"transparent",border:"none",padding:0,color:C.muted,lineHeight:1}}>{item.doDate?`do ${fmtDate(item.doDate)}`:rolledDo?`do↑ ${fmtDate(rolledDo)}`:"set do"}</button>
                 <span style={{color:C.line2,fontSize:10,lineHeight:1}}>·</span>
                 <span style={{...mono,fontSize:10,color:C.muted,lineHeight:1}}>{item.dueDate?`due ${fmtDate(item.dueDate)}`:"no due"}</span>
               </div>
@@ -534,14 +546,14 @@ function TreeItem({item,items,allContexts,allStatuses,depth,onEdit,onAdd,onDelet
             {pct!==null&&<div style={{marginTop:8,paddingLeft:18}}><ProgressBar pct={pct}/></div>}
           </div>
           <div style={{display:"flex",gap:3,flexShrink:0,marginTop:2}}>
-            <button onClick={()=>onAdd(item.id)} style={{background:"transparent",border:`1px solid ${C.line}`,color:C.muted,borderRadius:6,padding:"2px 7px",fontSize:12,cursor:"pointer"}}>+</button>
-            <button onClick={()=>onEdit(item)} style={{background:"transparent",border:"none",color:C.muted,cursor:"pointer",fontSize:13,padding:0}}>✎</button>
-            <button onClick={()=>onDelete(item.id)} style={{background:"transparent",border:"none",color:C.muted,borderRadius:6,padding:"2px 5px",fontSize:14,cursor:"pointer"}}>×</button>
+            <button onClick={(e)=>{e.stopPropagation();onAdd(item.id);}} style={{background:"transparent",border:`1px solid ${C.line}`,color:C.muted,borderRadius:6,padding:"2px 7px",fontSize:12,cursor:"pointer"}}>+</button>
+            <button onClick={(e)=>{e.stopPropagation();onEdit(item);}} style={{background:"transparent",border:"none",color:C.muted,cursor:"pointer",fontSize:13,padding:0}}>✎</button>
+            <button onClick={(e)=>{e.stopPropagation();onDelete(item.id);}} style={{background:"transparent",border:"none",color:C.muted,borderRadius:6,padding:"2px 5px",fontSize:14,cursor:"pointer"}}>×</button>
           </div>
         </div>
         {isExpanded&&children.length>0&&(
           <div style={{marginTop:6,marginLeft:depth*18+18,display:"flex",flexDirection:"column",gap:6}}>
-            {children.map(child=><TreeItem key={child.id} item={child} items={items} allContexts={allContexts} allStatuses={allStatuses} depth={depth+1} onEdit={onEdit} onAdd={onAdd} onDelete={onDelete} onToggleSubtask={onToggleSubtask} expanded={expanded} onToggleExpand={onToggleExpand} onEditDoDate={onEditDoDate} onUpdate={onUpdate} onJumpTo={onJumpTo}/>)}
+            {children.map(child=><TreeItem key={child.id} item={child} items={items} allContexts={allContexts} allStatuses={allStatuses} depth={depth+1} onEdit={onEdit} onAdd={onAdd} onDelete={onDelete} onToggleSubtask={onToggleSubtask} expanded={expanded} onToggleExpand={onToggleExpand} onEditDoDate={onEditDoDate} onUpdate={onUpdate} onJumpTo={onJumpTo} onOpenProject={onOpenProject}/>)}
             <button onClick={()=>onAdd(item.id)} style={{display:"block",width:"100%",padding:"6px 0",background:"transparent",border:`1px dashed ${C.line2}`,borderRadius:6,fontSize:12,color:C.muted,cursor:"pointer",...sans,textAlign:"center"}}>+ Add inside {item.title}</button>
           </div>
         )}
@@ -554,18 +566,17 @@ function TreeItem({item,items,allContexts,allStatuses,depth,onEdit,onAdd,onDelet
   const grandparent=parent?items.find(x=>x.id===parent.parentId):null;
   return(
     <div style={{marginLeft:depth*18}}>
-      <div style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 12px",background:item.linked?C.bg:C.white,border:`1px ${item.linked?"dashed":"solid"} ${C.line}`,borderRadius:10,opacity:isDone?0.6:item.linked?0.75:1,position:"relative"}}>
-        <button onClick={()=>onToggleSubtask&&onUpdate&&onUpdate(item.id,{status:isDone?"actionable":"complete"})} style={{width:18,height:18,borderRadius:4,flexShrink:0,marginTop:3,cursor:"pointer",padding:0,border:`2px solid ${isDone?C.green:C.line2}`,background:isDone?C.green:"transparent",display:"flex",alignItems:"center",justifyContent:"center"}}>{isDone&&<span style={{color:"#fff",fontSize:10}}>✓</span>}</button>
+      <div onClick={()=>onEdit&&onEdit(item)} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 12px",background:item.linked?C.bg:C.white,border:`1px ${item.linked?"dashed":"solid"} ${C.line}`,borderRadius:10,opacity:isDone?0.6:item.linked?0.75:1,position:"relative",cursor:"pointer"}}>
+        <button onClick={(e)=>{e.stopPropagation();onToggleSubtask&&onUpdate&&onUpdate(item.id,{status:isDone?"actionable":"complete"});}} style={{width:18,height:18,borderRadius:4,flexShrink:0,marginTop:3,cursor:"pointer",padding:0,border:`2px solid ${isDone?C.green:C.line2}`,background:isDone?C.green:"transparent",display:"flex",alignItems:"center",justifyContent:"center"}}>{isDone&&<span style={{color:"#fff",fontSize:10}}>✓</span>}</button>
         <TaskCardBody item={item} allContexts={allContexts} allStatuses={allStatuses} onEdit={onEdit} onUpdate={onUpdate} onJumpTo={onJumpTo} parent={parent} grandparent={grandparent} onToggleSubtask={onToggleSubtask}/>
         <div style={{display:"flex",gap:3,flexShrink:0,marginTop:2}}>
-          <button onClick={()=>onAdd(item.id)} style={{background:"transparent",border:`1px solid ${C.line}`,color:C.muted,borderRadius:6,padding:"2px 7px",fontSize:12,cursor:"pointer"}}>+</button>
-          <button onClick={()=>onEdit(item)} style={{background:"transparent",border:"none",color:C.muted,cursor:"pointer",fontSize:13,padding:0}}>✎</button>
-          <button onClick={()=>onDelete(item.id)} style={{background:"transparent",border:"none",color:C.muted,borderRadius:6,padding:"2px 5px",fontSize:14,cursor:"pointer"}}>×</button>
+          <button onClick={(e)=>{e.stopPropagation();onAdd(item.id);}} style={{background:"transparent",border:`1px solid ${C.line}`,color:C.muted,borderRadius:6,padding:"2px 7px",fontSize:12,cursor:"pointer"}}>+</button>
+          <button onClick={(e)=>{e.stopPropagation();onDelete(item.id);}} style={{background:"transparent",border:"none",color:C.muted,borderRadius:6,padding:"2px 5px",fontSize:14,cursor:"pointer"}}>×</button>
         </div>
       </div>
       {isExpanded&&children.length>0&&(
         <div style={{marginTop:6,marginLeft:18,display:"flex",flexDirection:"column",gap:6}}>
-          {children.map(child=><TreeItem key={child.id} item={child} items={items} allContexts={allContexts} allStatuses={allStatuses} depth={depth+1} onEdit={onEdit} onAdd={onAdd} onDelete={onDelete} onToggleSubtask={onToggleSubtask} expanded={expanded} onToggleExpand={onToggleExpand} onEditDoDate={onEditDoDate} onUpdate={onUpdate} onJumpTo={onJumpTo}/>)}
+          {children.map(child=><TreeItem key={child.id} item={child} items={items} allContexts={allContexts} allStatuses={allStatuses} depth={depth+1} onEdit={onEdit} onAdd={onAdd} onDelete={onDelete} onToggleSubtask={onToggleSubtask} expanded={expanded} onToggleExpand={onToggleExpand} onEditDoDate={onEditDoDate} onUpdate={onUpdate} onJumpTo={onJumpTo} onOpenProject={onOpenProject}/>)}
         </div>
       )}
     </div>
@@ -586,17 +597,34 @@ function DoDateModal({item,onSave,onClose}){
   );
 }
 
-function ProjectPopup({projectId,items,allContexts,allStatuses,onClose,onEdit,onAdd,onDelete,onToggleSubtask,onEditDoDate,expanded,onToggleExpand,onUpdate,onJumpTo}){
+function ProjectPopup({projectId,items,allContexts,allStatuses,onClose,onEdit,onAdd,onDelete,onToggleSubtask,onEditDoDate,expanded,onToggleExpand,onUpdate,onJumpTo,projectPath,onOpenProject}){
   const project=items.find(x=>x.id===projectId);
   if(!project)return null;
   const pct=progressOf(items,projectId);
   const rolledDo=rollupDoDate(items,projectId);
+  const popupExpanded=new Set(expanded);
+  getDescendants(items,projectId).forEach(item=>popupExpanded.add(item.id));
+  popupExpanded.add(projectId);
+  const pathItems=(projectPath||[]).map(id=>items.find(x=>x.id===id)).filter(Boolean);
   return(
     <div style={{position:"fixed",inset:0,zIndex:600,background:"rgba(0,0,0,0.35)",display:"flex",alignItems:"center",justifyContent:"center",padding:"20px 16px"}} onClick={e=>e.target===e.currentTarget&&onClose()}>
       <div style={{background:C.white,border:`1px solid ${C.line}`,borderRadius:16,width:"100%",maxWidth:620,maxHeight:"85vh",display:"flex",flexDirection:"column",boxShadow:"0 20px 60px rgba(0,0,0,.2)",overflow:"hidden"}}>
         <div style={{padding:"20px 24px 16px",borderBottom:`1px solid ${C.line}`,flexShrink:0}}>
           <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:10}}>
             <div style={{flex:1}}>
+              {pathItems.length>1&&(
+                <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8,flexWrap:"wrap"}}>
+                  <button onClick={()=>onOpenProject?.(pathItems[pathItems.length-2]?.id)} style={{...sans,fontSize:11,background:"transparent",border:`1px solid ${C.line}`,borderRadius:999,padding:"3px 8px",cursor:"pointer",color:C.ink2}}>← Back</button>
+                  <div style={{display:"flex",alignItems:"center",gap:4,flexWrap:"wrap"}}>
+                    {pathItems.map((item,index)=>(
+                      <div key={item.id} style={{display:"flex",alignItems:"center",gap:4}}>
+                        <button onClick={()=>onOpenProject?.(item.id)} style={{...sans,fontSize:11,background:"transparent",border:"none",padding:0,cursor:"pointer",color:index===pathItems.length-1?C.ink:C.muted,textDecoration:index===pathItems.length-1?"none":"underline"}}>{item.title}</button>
+                        {index<pathItems.length-1&&<span style={{color:C.line2,fontSize:10}}>›</span>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}><span style={{fontSize:14,color:C.muted}}>◈</span><div style={{...serif,fontSize:22,color:C.ink,lineHeight:1.2}}>{project.title}</div></div>
               {project.description&&<div style={{...sans,fontSize:13,color:C.muted,marginTop:4,lineHeight:1.5}}>{project.description}</div>}
               <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:8,alignItems:"center"}}>
@@ -613,7 +641,7 @@ function ProjectPopup({projectId,items,allContexts,allStatuses,onClose,onEdit,on
           </div>
         </div>
         <div style={{flex:1,overflowY:"auto",padding:"14px 20px",display:"flex",flexDirection:"column",gap:6}}>
-          {getChildren(items,projectId).map(child=><TreeItem key={child.id} item={child} items={items} allContexts={allContexts} allStatuses={allStatuses} depth={0} onEdit={onEdit} onAdd={onAdd} onDelete={onDelete} onToggleSubtask={onToggleSubtask} expanded={expanded} onToggleExpand={onToggleExpand} onEditDoDate={onEditDoDate} onUpdate={onUpdate} onJumpTo={onJumpTo}/>)}
+          {getChildren(items,projectId).map(child=><TreeItem key={child.id} item={child} items={items} allContexts={allContexts} allStatuses={allStatuses} depth={0} onEdit={onEdit} onAdd={onAdd} onDelete={onDelete} onToggleSubtask={onToggleSubtask} expanded={popupExpanded} onToggleExpand={onToggleExpand} onEditDoDate={onEditDoDate} onUpdate={onUpdate} onJumpTo={onJumpTo} onOpenProject={item=>onOpenProject?.(item.id)}/>)}
           <button onClick={()=>onAdd(projectId)} style={{width:"100%",padding:"8px 0",marginTop:4,background:"transparent",border:`1px dashed ${C.line2}`,borderRadius:8,fontSize:12,color:C.muted,cursor:"pointer",...sans}}>+ Add task</button>
         </div>
       </div>
@@ -636,7 +664,7 @@ function DashPanel({title,icon,items,allItems,allContexts,allStatuses,onEdit,onT
   );
 }
 
-function MilestonePanel({items,allContexts,allStatuses,onEdit,onEditDoDate,onUpdate}){
+function MilestonePanel({items,allContexts,allStatuses,onEdit,onEditDoDate,onUpdate,onOpenProject}){
   const projects=items.filter(x=>x.type==="project"&&x.status!=="complete"&&x.status!=="someday");
   return(
     <div style={{background:C.white,border:`1px solid ${C.line}`,borderRadius:12,display:"flex",flexDirection:"column",minHeight:200,overflow:"hidden"}}>
@@ -650,7 +678,7 @@ function MilestonePanel({items,allContexts,allStatuses,onEdit,onEditDoDate,onUpd
           const pct=progressOf(items,item.id);
           const rolledDo=rollupDoDate(items,item.id);
           return(
-            <div key={item.id} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 12px",background:C.white,border:`1px solid ${C.line}`,borderRadius:10}}>
+            <div key={item.id} onClick={()=>onOpenProject?.(item)} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 12px",background:C.white,border:`1px solid ${C.line}`,borderRadius:10,cursor:"pointer"}}>
               <div style={{width:18,flexShrink:0,marginTop:3,fontSize:12,color:C.muted,textAlign:"center"}}>◈</div>
               <div style={{flex:1,minWidth:0}}>
                 <div style={{display:"flex",alignItems:"baseline",gap:6}}>
@@ -669,7 +697,7 @@ function MilestonePanel({items,allContexts,allStatuses,onEdit,onEditDoDate,onUpd
                 </div>
                 {pct!==null&&<div style={{marginTop:8,paddingLeft:18}}><ProgressBar pct={pct}/></div>}
               </div>
-              <button onClick={()=>onEdit(item)} style={{background:"transparent",border:"none",color:C.muted,cursor:"pointer",fontSize:13,padding:0,marginTop:2}}>✎</button>
+              <button onClick={(e)=>{e.stopPropagation();onEdit(item);}} style={{background:"transparent",border:"none",color:C.muted,cursor:"pointer",fontSize:13,padding:0,marginTop:2}}>✎</button>
             </div>
           );
         })}
@@ -772,10 +800,11 @@ function SettingsModal({contexts,statuses,onUpdateContext,onDeleteContext,onAddC
   );
 }
 
-export default function Focus(){
-  const[items,setItems]=useState(SEED);
+export default function Focus({userId}){
+  const[items,setItems]=useState([]);
   const[contexts,setContexts]=useState(DEFAULT_CONTEXTS);
   const[statuses,setStatuses]=useState(STATUSES);
+  const[dataLoading,setDataLoading]=useState(true);
   const[view,setView]=useState("dashboard");
   const[form,setForm]=useState(null);
   const[expanded,setExpanded]=useState(()=>new Set(["m1","m2","m3","m4"]));
@@ -783,8 +812,32 @@ export default function Focus(){
   const[ctxFilter,setCtxFilter]=useState([]);
   const[doDateModal,setDoDateModal]=useState(null);
   const[projectPopup,setProjectPopup]=useState(null);
+  const[projectPopupPath,setProjectPopupPath]=useState([]);
   const[settingsOpen,setSettingsOpen]=useState(false);
-  useEffect(()=>{ maintainRecurrenceWindows(); },[]);
+  useEffect(()=>{
+    async function load(){
+      const saved = await loadFocusData(userId);
+      if(saved){
+        setItems(saved.items ?? SEED);
+        setContexts(saved.contexts ?? DEFAULT_CONTEXTS);
+        setStatuses(saved.statuses ?? STATUSES);
+      } else {
+        setItems(SEED);
+      }
+      setDataLoading(false);
+    }
+    load();
+  },[userId]);
+
+  useEffect(()=>{ if(!dataLoading) maintainRecurrenceWindows(); },[dataLoading]);
+
+  useEffect(()=>{
+    if(dataLoading) return;
+    const timer = setTimeout(()=>{
+      saveFocusData(userId, { items, contexts, statuses });
+    }, 800);
+    return ()=>clearTimeout(timer);
+  },[items, contexts, statuses, dataLoading]);
   const[inboxText,setInboxText]=useState("");
   const[quickAdd,setQuickAdd]=useState(false);
   const[quickText,setQuickText]=useState("");
@@ -892,7 +945,7 @@ export default function Focus(){
   function captureQuick(e){
     if(e.key==="Escape"){setQuickAdd(false);setQuickText("");return;}
     if(e.key!=="Enter"||!quickText.trim())return;
-    const newTask={id:nid(),type:"task",title:quickText.trim(),description:"",status:"actionable",contexts:[],parentId:null,dueDate:null,doDate:null,priority:null,size:null,waitingFor:"",subtasks:[]};
+    const newTask={id:nid(),type:"task",title:quickText.trim(),description:"",status:"actionable",contexts:[INBOX_CONTEXT_KEY],parentId:null,dueDate:null,doDate:null,priority:null,size:null,waitingFor:"",subtasks:[]};
     setItems(p=>[newTask,...p]);
     setQuickText("");
     setQuickAdd(false);
@@ -900,12 +953,22 @@ export default function Focus(){
 
   function captureInbox(e){
     if(e.key!=="Enter"||!inboxText.trim())return;
-    const newTask={id:nid(),type:"task",title:inboxText.trim(),description:"",status:"actionable",contexts:[],parentId:null,dueDate:null,doDate:null,priority:null,size:null,waitingFor:"",subtasks:[]};
+    const newTask={id:nid(),type:"task",title:inboxText.trim(),description:"",status:"actionable",contexts:[INBOX_CONTEXT_KEY],parentId:null,dueDate:null,doDate:null,priority:null,size:null,waitingFor:"",subtasks:[]};
     setItems(p=>[newTask,...p]);
     setInboxText("");
   }
 
-  function jumpTo(id){let item=items.find(x=>x.id===id);while(item?.parentId){item=items.find(x=>x.id===item.parentId);}if(item)setProjectPopup(item.id);}
+  function openProjectPopup(id){
+    const path=[];
+    let current=items.find(x=>x.id===id);
+    while(current){
+      path.unshift(current.id);
+      current=current.parentId?items.find(x=>x.id===current.parentId):null;
+    }
+    setProjectPopup(id);
+    setProjectPopupPath(path);
+  }
+  function jumpTo(id){let item=items.find(x=>x.id===id);while(item?.parentId){item=items.find(x=>x.id===item.parentId);}if(item)openProjectPopup(item.id);}
   function saveDoDate(item,date){setItems(p=>p.map(x=>x.id===item.id?{...x,doDate:date}:x));shiftLinkedDescendants({...item,doDate:date},item.doDate,item.dueDate);setDoDateModal(null);}
   function saveItem(item){setItems(p=>p.find(x=>x.id===item.id)?p.map(x=>x.id===item.id?item:x):[...p,item]);if(item.parentId)setExpanded(e=>{const n=new Set(e);n.add(item.parentId);return n;});setForm(null);if(item.recurrence&&(item.recurrence.trigger==="fixed"||item.recurrence.trigger==="completion")){maintainRecurrenceWindows();}}
   function deleteItem(id){if(!confirm("Delete this and all children?"))return;const d=new Set([id,...getDescendants(items,id).map(x=>x.id)]);setItems(p=>p.filter(x=>!d.has(x.id)));}
@@ -953,15 +1016,17 @@ export default function Focus(){
   const weekEndS=weekEnd.toISOString().slice(0,10);
   const PRI_ORDER={urgent:0,high:1,normal:2,low:3};
   const sortByPri=arr=>[...arr].sort((a,b)=>{const pa=PRI_ORDER[a.priority]??4,pb=PRI_ORDER[b.priority]??4;if(pa!==pb)return pa-pb;const ad=a.doDate??"9999",bd=b.doDate??"9999";return ad<bd?-1:ad>bd?1:0;});
-  const allActions=items.filter(x=>x.type==="task");
+  const allActions=items.filter(x=>x.type==="task"&&!isInboxItem(x));
   let filteredActions=allActions.filter(x=>{if(doFilter==="today")return x.doDate===today;if(doFilter==="week")return x.doDate&&x.doDate<=weekEndS;return true;});
   if(ctxFilter.length>0)filteredActions=filteredActions.filter(x=>ctxFilter.every(k=>x.contexts?.includes(k)));
   filteredActions=sortByPri(filteredActions);
   const dashActionable=sortByPri(allActions.filter(x=>x.doDate===today&&x.status==="actionable"));
   const dashNotActionable=sortByPri(allActions.filter(x=>x.doDate===today&&x.status!=="actionable"&&x.status!=="complete"));
-  const roots=items.filter(x=>!x.parentId);
-  const inboxItems=items.filter(x=>x.type==="task"&&!x.parentId&&!x.doDate&&x.status==="actionable");
+  const roots=items.filter(x=>!x.parentId&&!isInboxItem(x));
+  const inboxItems=items.filter(x=>isInboxItem(x));
   const openToday=allActions.filter(x=>x.doDate===today&&x.status!=="complete").length;
+
+  if(dataLoading) return <div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"Georgia,serif"}}><div style={{fontStyle:"italic",fontSize:24,color:C.ink}}>Loading Focus…</div></div>;
 
   return(
     <div style={{minHeight:"100vh",background:C.bg,...sans,color:C.ink}} onClick={e=>{if(quickAdd&&!e.target.closest("[data-quickadd]"))setQuickAdd(false);}}>
@@ -989,7 +1054,7 @@ export default function Focus(){
                     disabled={!quickText.trim()}
                     onClick={()=>{
                       if(!quickText.trim())return;
-                      const newTask={id:nid(),type:"task",title:quickText.trim(),description:"",status:"actionable",contexts:[],parentId:null,dueDate:null,doDate:null,priority:null,size:null,waitingFor:"",subtasks:[]};
+                      const newTask={id:nid(),type:"task",title:quickText.trim(),description:"",status:"actionable",contexts:[INBOX_CONTEXT_KEY],parentId:null,dueDate:null,doDate:null,priority:null,size:null,waitingFor:"",subtasks:[]};
                       setItems(p=>[newTask,...p]);
                       setQuickText("");
                       setQuickAdd(false);
@@ -1000,7 +1065,7 @@ export default function Focus(){
                   <button
                     disabled={!quickText.trim()}
                     onClick={()=>{
-                      const newTask={id:nid(),type:"task",title:quickText.trim(),description:"",status:"actionable",contexts:[],parentId:null,dueDate:null,doDate:null,priority:null,size:null,waitingFor:"",subtasks:[]};
+                      const newTask={id:nid(),type:"task",title:quickText.trim(),description:"",status:"actionable",contexts:[INBOX_CONTEXT_KEY],parentId:null,dueDate:null,doDate:null,priority:null,size:null,waitingFor:"",subtasks:[]};
                       setItems(p=>[newTask,...p]);
                       setQuickText("");
                       setQuickAdd(false);
@@ -1022,7 +1087,7 @@ export default function Focus(){
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(280px, 1fr))",gap:16,alignItems:"start"}}>
             <DashPanel title="Actionable Today" icon="○" items={dashActionable} allItems={items} allContexts={contexts} allStatuses={statuses} onEdit={item=>setForm({item})} onToggleStatus={toggleStatus} onUpdate={updateTask} onJumpTo={jumpTo} emptyMsg="Nothing actionable today"/>
             <DashPanel title="Not Actionable Today" icon="◌" items={dashNotActionable} allItems={items} allContexts={contexts} allStatuses={statuses} onEdit={item=>setForm({item})} onToggleStatus={toggleStatus} onUpdate={updateTask} onJumpTo={jumpTo} emptyMsg="Nothing else today"/>
-            <MilestonePanel items={items} allContexts={contexts} allStatuses={statuses} onEdit={item=>setForm({item})} onEditDoDate={item=>setDoDateModal(item)} onUpdate={updateTask} />
+            <MilestonePanel items={items} allContexts={contexts} allStatuses={statuses} onEdit={item=>setForm({item})} onEditDoDate={item=>setDoDateModal(item)} onUpdate={updateTask} onOpenProject={item=>openProjectPopup(item.id)} />
           </div>
         )}
         {view==="inbox"&&(
@@ -1052,7 +1117,7 @@ export default function Focus(){
                       <EditableText text={item.title} onSave={t=>updateTask(item.id,{title:t})} style={{...serif,fontSize:14,color:C.ink}} />
                     </div>
                     <button
-                      onClick={()=>setForm({item})}
+                      onClick={()=>setForm({item:{...item,contexts:item.contexts?.filter(k=>k!==INBOX_CONTEXT_KEY) || []}})}
                       style={{...sans,fontSize:11,color:C.accent,background:`${C.accent}15`,border:`1px solid ${C.accent}40`,borderRadius:6,padding:"4px 10px",cursor:"pointer",fontWeight:500,whiteSpace:"nowrap"}}>
                       Process →
                     </button>
@@ -1070,7 +1135,7 @@ export default function Focus(){
 
         {view==="plan"&&(
           <div style={{display:"flex",flexDirection:"column",gap:8}}>
-            {roots.map(item=><TreeItem key={item.id} item={item} items={items} allContexts={contexts} allStatuses={statuses} depth={0} onEdit={item=>setForm({item})} onAdd={pid=>setForm({item:{type:"task",parentId:pid,subtasks:[],contexts:[]}})} onDelete={deleteItem} onToggleSubtask={toggleSubtask} expanded={expanded} onToggleExpand={toggleExpand} onEditDoDate={item=>setDoDateModal(item)} onUpdate={updateTask} onJumpTo={jumpTo}/>)}
+            {roots.map(item=><TreeItem key={item.id} item={item} items={items} allContexts={contexts} allStatuses={statuses} depth={0} onEdit={item=>setForm({item})} onAdd={pid=>setForm({item:{type:"task",parentId:pid,subtasks:[],contexts:[]}})} onDelete={deleteItem} onToggleSubtask={toggleSubtask} expanded={expanded} onToggleExpand={toggleExpand} onEditDoDate={item=>setDoDateModal(item)} onUpdate={updateTask} onJumpTo={jumpTo} onOpenProject={item=>openProjectPopup(item.id)}/>)}
             {roots.length===0&&<div style={{textAlign:"center",padding:"48px 0",color:C.muted}}><div style={{...serifI,fontSize:22,marginBottom:8}}>Nothing here yet.</div></div>}
             <button onClick={()=>setForm({item:{type:"project",subtasks:[],contexts:[]}})} style={{width:"100%",padding:"10px 0",background:"transparent",border:`1px dashed ${C.line2}`,borderRadius:10,fontSize:13,color:C.muted,cursor:"pointer",...sans,marginTop:4}}>+ New project</button>
           </div>
@@ -1090,7 +1155,7 @@ export default function Focus(){
       </div>
 
       {settingsOpen&&<SettingsModal contexts={contexts} statuses={statuses} onUpdateContext={updateContext} onDeleteContext={deleteContext} onAddContext={addContext2} onUpdateStatus={updateStatus} onDeleteStatus={deleteStatus} onAddStatus={addStatus} onClose={()=>setSettingsOpen(false)}/>}
-      {projectPopup&&<ProjectPopup projectId={projectPopup} items={items} allContexts={contexts} allStatuses={statuses} onClose={()=>setProjectPopup(null)} onEdit={item=>{setForm({item});setProjectPopup(null);}} onAdd={pid=>setForm({item:{type:"task",parentId:pid,subtasks:[],contexts:[]}})} onDelete={deleteItem} onToggleSubtask={toggleSubtask} onEditDoDate={item=>setDoDateModal(item)} expanded={expanded} onToggleExpand={toggleExpand} onUpdate={updateTask} onJumpTo={jumpTo}/>}
+      {projectPopup&&<ProjectPopup projectId={projectPopup} items={items} allContexts={contexts} allStatuses={statuses} onClose={()=>{setProjectPopup(null);setProjectPopupPath([]);}} onEdit={item=>{setForm({item});setProjectPopup(null);setProjectPopupPath([]);}} onAdd={pid=>setForm({item:{type:"task",parentId:pid,subtasks:[],contexts:[]}})} onDelete={deleteItem} onToggleSubtask={toggleSubtask} onEditDoDate={item=>setDoDateModal(item)} expanded={expanded} onToggleExpand={toggleExpand} onUpdate={updateTask} onJumpTo={jumpTo} projectPath={projectPopupPath} onOpenProject={id=>openProjectPopup(id)}/>}
       {doDateModal&&<DoDateModal item={doDateModal} onSave={date=>saveDoDate(doDateModal,date)} onClose={()=>setDoDateModal(null)}/>}
       {form&&<ItemForm item={form.item} items={items} allContexts={contexts} allStatuses={statuses} onSave={saveItem} onClose={()=>setForm(null)} onAddContext={addContext}/>}
     </div>

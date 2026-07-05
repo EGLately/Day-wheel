@@ -12,31 +12,25 @@ async function saveUserData(userId, payload) {
 }
 
 const DEFAULT_CATS = {
-  sleep:    { label:"Sleep",      color:"#7c6fa0" },
-  morning:  { label:"Morning",    color:"#d4845a" },
-  focus:    { label:"Focus work", color:"#4a6fa5" },
-  misc:     { label:"Misc work",  color:"#7a8fa8" },
-  personal: { label:"Personal",   color:"#5a9e7a" },
-  meal:     { label:"Meal",       color:"#c9a84c" },
-  family:   { label:"Family",     color:"#c97a6a" },
-  margin:   { label:"Margin",     color:"#b8b070" },
-  winddown: { label:"Wind down",  color:"#9a7aaa" },
+  sleep:            { label:"Sleep",                color:"#7c6fa0" },
+  routines:         { label:"Routines",             color:"#d4845a" },
+  focus:            { label:"Focus",                color:"#4a6fa5" },
+  meals:            { label:"Meals",                color:"#7a8fa8" },
+  fitness:          { label:"Fitness",              color:"#5a9e7a" },
+  margin:           { label:"Margin",               color:"#b8b070" },
+  event:            { label:"Event",                color:"#c97a6a" },
+  people_connection:{ label:"People & Connection", color:"#9a7aaa" },
 };
 const PALETTE = ["#7c6fa0","#d4845a","#4a6fa5","#7a8fa8","#5a9e7a","#c9a84c","#c97a6a","#b8b070","#9a7aaa","#6a9ea0","#a06a7c","#7a9a5a","#c0784a","#5a7ab8","#b85a6a","#8a7a5a","#4a8a7a","#a08a4a"];
 const WD = [];
-const WE = [
-  { id:"b2", label:"Morning",          cat:"morning",  duration:90,  startMin:540  },
-  { id:"b4", label:"Personal project", cat:"personal", duration:120, startMin:690  },
-  { id:"b5", label:"Errands",          cat:"misc",     duration:60,  startMin:810  },
-  { id:"b6", label:"Margin",           cat:"margin",   duration:60,  startMin:870  },
-  { id:"b7", label:"Family time",      cat:"family",   duration:120, startMin:930  },
-  { id:"b8", label:"Cook & eat",       cat:"meal",     duration:60,  startMin:1050 },
-  { id:"b9", label:"Wind down",        cat:"winddown", duration:90,  startMin:1110 },
-];
+const WE = [];
+function createDefaultTemplate({ id, name, builtIn = true, wakeTime = 360 }) {
+  return { id, name, builtIn, schedule:[], goals:{ sleep:480 }, wakeTime, wakeRoutine:30, bedRoutine:30, meals:{ breakfast:true, lunch:true, dinner:true } };
+}
 const DEFAULT_TEMPLATES = {
-  weekday:     { id:"weekday",     name:"Weekday",     builtIn:true,  schedule:WD, goals:{sleep:480}, wakeTime:360, wakeRoutine:30, bedRoutine:30, meals:{breakfast:true,lunch:true,dinner:true} },
-  weekend:     { id:"weekend",     name:"Weekend",     builtIn:true,  schedule:WE, goals:{sleep:480}, wakeTime:540, wakeRoutine:30, bedRoutine:30, meals:{breakfast:true,lunch:true,dinner:true} },
-  alternative: { id:"alternative", name:"Alternative", builtIn:false, schedule:WD.map(s=>({...s})), goals:{sleep:480}, wakeTime:360, wakeRoutine:30, bedRoutine:30, meals:{breakfast:true,lunch:true,dinner:true} },
+  weekday:     createDefaultTemplate({ id:"weekday",     name:"Weekday",     builtIn:true,  wakeTime:360 }),
+  weekend:     createDefaultTemplate({ id:"weekend",     name:"Weekend",     builtIn:true,  wakeTime:540 }),
+  alternative: createDefaultTemplate({ id:"alternative", name:"Alternative", builtIn:false, wakeTime:360 }),
 };
 const MIN_DUR=15, MAX_DUR=480, TOTAL=1440;
 const nid = () => `s${Date.now()}_${Math.random().toString(36).slice(2,7)}`;
@@ -386,7 +380,18 @@ export default function DayWheel({userId,onSignOut,onGoToFocus}){
   function deleteAct(id){upd(s=>{if(s[s.findIndex(x=>x.id===id)]?.isSleep)return s;const arr=s.filter(x=>x.id!==id);setSelectedId(arr[0]?.id??null);return arr;});}
   function insertAfter(id){upd(s=>{const i=s.findIndex(x=>x.id===id);if(i<0)return s;const cur=s[i];if(cur.isSleep)return s;const curStart=cur.startMin??wakeTime;const newStart=(curStart+cur.duration)%1440;const newDur=60;const newId=nid();if(!wouldOverlap(s,wakeTime,sleepGoal,null,newStart,newDur,wakeRoutine,bedRoutine,meals)){setSelectedId(newId);return[...s,{id:newId,label:"New activity",cat:cur.cat,duration:newDur,startMin:newStart}];}const sd2=(sleepGoal&&sleepGoal>0)?sleepGoal:480;for(let t=wakeTime;t<wakeTime+(1440-sd2)-newDur;t+=15){const ts=t%1440;if(!wouldOverlap(s,wakeTime,sleepGoal,null,ts,newDur,wakeRoutine,bedRoutine,meals)){setSelectedId(newId);return[...s,{id:newId,label:"New activity",cat:cur.cat,duration:newDur,startMin:ts}];}}return s;});}
   function addAt(clockMin){upd(s=>{const dd=60;const snapped=Math.round(clockMin/15)*15;if(wouldOverlap(s,wakeTime,sleepGoal,null,snapped,dd,wakeRoutine,bedRoutine,meals)){for(let dur=dd;dur>=MIN_DUR;dur-=15){if(!wouldOverlap(s,wakeTime,sleepGoal,null,snapped,dur,wakeRoutine,bedRoutine,meals)){const newId=nid();const lc=s.filter(x=>!x.isSleep).slice(-1)[0]?.cat??"misc";setSelectedId(newId);return[...s,{id:newId,label:"New activity",cat:lc,duration:dur,startMin:snapped}];}}return s;}const newId=nid();const lc=s.filter(x=>!x.isSleep).slice(-1)[0]?.cat??"misc";setSelectedId(newId);return[...s,{id:newId,label:"New activity",cat:lc,duration:dd,startMin:snapped}];});}
-  function resetTpl(){const defs={weekday:WD,weekend:WE};if(!defs[baseTpl.id])return;const reset={...baseTpl,schedule:defs[baseTpl.id],goals:{weekday:{sleep:480},weekend:{sleep:480}}[baseTpl.id]??{},wakeTime:{weekday:360,weekend:540}[baseTpl.id]??360};setWorkingCopy(reset);setTemplates(t=>({...t,[baseTpl.id]:reset}));setSelectedId(null);}
+  function resetTpl(){
+    if(!baseTpl?.id)return;
+    const reset = {
+      ...createDefaultTemplate({ id:baseTpl.id, name:baseTpl.name, builtIn:baseTpl.builtIn, wakeTime:baseTpl.id==="weekend"?540:360 }),
+      id:baseTpl.id,
+      name:baseTpl.name,
+      builtIn:baseTpl.builtIn,
+    };
+    setWorkingCopy(reset);
+    setTemplates(t=>({...t,[baseTpl.id]:reset}));
+    setSelectedId(null);
+  }
   function clearAllActivities(){updWC(wc=>({...wc,schedule:[]}));setSelectedId(null);}
   async function commitToTemplate(){const next={...templates,[baseTpl.id]:{...workingCopy,id:baseTpl.id}};setTemplates(next);await saveUserData(userId,{templates:next,override_id:overrideId,override_date:overrideDate});setSaveMsg("Saved");setTimeout(()=>setSaveMsg(null),2500);}
   function discardChanges(){setWorkingCopy({...baseTpl});setSelectedId(null);}
