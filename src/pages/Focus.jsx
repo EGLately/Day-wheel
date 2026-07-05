@@ -6,6 +6,20 @@ const serifI = { fontFamily:"'Georgia','Times New Roman',serif", fontStyle:"ital
 const mono   = { fontFamily:"'JetBrains Mono',ui-monospace,monospace" };
 const sans   = { fontFamily:"Inter,system-ui,sans-serif" };
 
+function EditableText({text,onSave,style,children}){
+  const [editing,setEditing]=useState(false);
+  const [val,setVal]=useState(text||"");
+  useEffect(()=>setVal(text||""),[text]);
+  return editing?(
+    <input autoFocus value={val} onChange={e=>setVal(e.target.value)} onBlur={()=>{setEditing(false);const t=(val||"").trim();if(t!==text&&t.length>0)onSave&&onSave(t);}} onKeyDown={e=>{if(e.key==="Enter"){e.currentTarget.blur();} if(e.key==="Escape"){setVal(text||"");setEditing(false);}}} style={{fontSize:14,padding:"4px 6px",borderRadius:6,border:`1px solid ${C.line}`,...style}} />
+  ):(
+    <span onClick={()=>setEditing(true)} style={{...style, cursor:"text"}}>
+      {children}
+      {text}
+    </span>
+  );
+}
+
 const STATUSES = [
   { key:"actionable", label:"Actionable", color:"#5a8a4a" },
   { key:"waiting",    label:"Waiting",    color:"#7a6fa0" },
@@ -46,7 +60,6 @@ function addYears(d,n){const dt=parseISO(d);dt.setFullYear(dt.getFullYear()+n);r
 function isWeekend(dt){const day=dt.getDay();return day===0||day===6;}
 
 function nthWeekdayOfMonth(year,monthIdx,weekday,ordinal){
-  // ordinal: 1-4 = nth occurrence, -1 = last
   if(ordinal===-1){
     const last=new Date(year,monthIdx+1,0);
     for(let d=last.getDate();d>=1;d--){
@@ -74,7 +87,6 @@ function nthBusinessDayOfMonth(year,monthIdx,n){
   return null;
 }
 
-// Compute the next date after `fromDate` according to a recurrence rule
 function computeNextDate(fromDate,rule){
   if(!rule||!rule.freq)return null;
   const interval=rule.interval||1;
@@ -85,7 +97,6 @@ function computeNextDate(fromDate,rule){
 
   if(rule.freq==="weekly"){
     if(rule.daysOfWeek&&rule.daysOfWeek.length>0){
-      // find next matching weekday after fromDate
       let dt=parseISO(fromDate);
       for(let i=1;i<=7*interval+7;i++){
         dt.setDate(dt.getDate()+1);
@@ -111,7 +122,6 @@ function computeNextDate(fromDate,rule){
       const result=nthWeekdayOfMonth(y,m,rule.weekday,rule.weekdayOrdinal);
       return result?toISO(result):null;
     }
-    // default: calendar day
     const day=rule.dayOfMonth||parseISO(fromDate).getDate();
     const next=addMonths(fromDate,interval);
     const dt=parseISO(next);
@@ -127,37 +137,13 @@ function computeNextDate(fromDate,rule){
   return null;
 }
 
-function recurrenceLabel(rule){
-  if(!rule||!rule.freq)return "";
-  const n=rule.interval||1;
-  const every=n>1?`every ${n} `:"every ";
-  if(rule.freq==="daily")return n>1?`${every}days`:"Daily";
-  if(rule.freq==="weekly"){
-    if(rule.daysOfWeek&&rule.daysOfWeek.length>0){
-      return `Weekly on ${rule.daysOfWeek.map(d=>WEEKDAY_SHORT[d]).join(", ")}`;
-    }
-    return n>1?`${every}weeks`:"Weekly";
-  }
-  if(rule.freq==="monthly"){
-    if(rule.dayType==="business")return `${every}month, ${rule.businessDayN||1}${ordSuffix(rule.businessDayN||1)} business day`;
-    if(rule.dayType==="weekday_occurrence"){
-      const ord=rule.weekdayOrdinal===-1?"last":`${rule.weekdayOrdinal}${ordSuffix(rule.weekdayOrdinal)}`;
-      return `${every}month, ${ord} ${WEEKDAY_NAMES[rule.weekday]}`;
-    }
-    return `${every}month on the ${rule.dayOfMonth||1}${ordSuffix(rule.dayOfMonth||1)}`;
-  }
-  if(rule.freq==="yearly")return n>1?`${every}years`:"Yearly";
-  return "";
-}
 function ordSuffix(n){const s=["th","st","nd","rd"],v=n%100;return s[(v-20)%10]||s[v]||s[0];}
 
-// Generate the next occurrence task from a completed/passed recurring task
 function generateNextOccurrence(task){
   const rec=task.recurrence;
   if(!rec)return null;
   const nextDo=task.doDate&&rec.do?computeNextDate(task.doDate,rec.do):task.doDate;
   const nextDue=task.dueDate&&rec.due?computeNextDate(task.dueDate,rec.due):task.dueDate;
-  // Check end conditions (use do-rule end condition as primary)
   const endRule=rec.do||rec.due;
   if(endRule){
     if(endRule.endType==="date"&&endRule.endDate&&nextDo&&nextDo>endRule.endDate)return null;
@@ -208,8 +194,9 @@ function rollupDoDate(items,id){const a=getActions(items,id).filter(x=>x.doDate&
 function ContextTag({ctx,small}){
   return <span style={{...mono,fontSize:small?9:10,color:C.ink2,background:C.bg2,border:`1px solid ${C.line2}`,borderRadius:5,padding:small?"1px 5px":"2px 7px",whiteSpace:"nowrap"}}>{ctx.label}</span>;
 }
-function StatusBadge({status,waitingFor,small}){
-  const s=STATUSES.find(x=>x.key===status)??STATUSES[0];
+function StatusBadge({status,waitingFor,small,allStatuses}){
+  const list=allStatuses||STATUSES;
+  const s=list.find(x=>x.key===status)??list[0];
   const label=status==="waiting"&&waitingFor?`Waiting: ${waitingFor}`:s.label;
   return <span style={{...sans,fontSize:small?10:11,color:s.color,background:`${s.color}12`,border:`1px solid ${s.color}35`,borderRadius:5,padding:small?"2px 7px":"3px 9px",whiteSpace:"nowrap",fontWeight:500}}>{label}</span>;
 }
@@ -222,13 +209,11 @@ function ProgressBar({pct}){
   return <div style={{display:"flex",alignItems:"center",gap:6}}><div style={{flex:1,height:3,background:C.bg2,borderRadius:999,overflow:"hidden"}}><div style={{height:"100%",width:`${pct}%`,background:pct===100?C.green:C.accent,borderRadius:999}}/></div><span style={{...mono,fontSize:9,color:C.muted}}>{pct}%</span></div>;
 }
 
-
 // ── RecurrenceEditor ─────────────────────────────────────────────────────────
 function RecurrenceRuleEditor({label,rule,onChange}){
   const active=!!rule;
   const r=rule||{freq:"monthly",interval:1,dayType:"calendar",dayOfMonth:1,daysOfWeek:[1],endType:"never"};
   function upd(patch){onChange({...r,...patch});}
-  const freqBtn=(val)=><button key={val} onClick={()=>upd({freq:val})} style={{padding:"3px 9px",fontSize:10,cursor:"pointer",...sans,border:`1px solid ${r.freq===val?C.ink:C.line}`,borderRadius:6,background:r.freq===val?C.ink:"transparent",color:r.freq===val?C.white:C.muted,textTransform:"capitalize"}}>{val}</button>;
   return(
     <div style={{background:C.bg,borderRadius:8,border:`1px solid ${C.line}`,padding:"10px 12px",display:"flex",flexDirection:"column",gap:8}}>
       <div style={{display:"flex",alignItems:"center",gap:8}}>
@@ -308,13 +293,12 @@ function RecurrenceRuleEditor({label,rule,onChange}){
 }
 
 function RecurrenceSection({recurrence,onChange}){
-  const[expanded,setExpanded]=useState(!!recurrence);
   const trigger=recurrence?.trigger||"fixed";
   const window=recurrence?.window||1;
 
   function toggleOn(){
-    if(recurrence){onChange(null);setExpanded(false);}
-    else{onChange({trigger:"fixed",window:1,do:null,due:null});setExpanded(true);}
+    if(recurrence){onChange(null);}
+    else{onChange({trigger:"fixed",window:1,do:null,due:null});}
   }
   function setTrigger(t){onChange({...recurrence,trigger:t});}
   function setWindow(w){onChange({...recurrence,window:w});}
@@ -364,7 +348,6 @@ function ItemForm({item,items,allContexts,allStatuses,onSave,onClose,onAddContex
   const[desc,setDesc]=useState(item.description??"");
   const[status,setStatus]=useState(item.status??"actionable");
   const[waitingFor,setWaiting]=useState(item.waitingFor??"");
-  const STATUSES_USE2=allStatuses||STATUSES;
   const[priority,setPriority]=useState(item.priority??"");
   const[size,setSize]=useState(item.size??"small");
   const[dueDate,setDueDate]=useState(item.dueDate??"");
@@ -373,12 +356,18 @@ function ItemForm({item,items,allContexts,allStatuses,onSave,onClose,onAddContex
   const[contexts,setContexts]=useState(item.contexts??[]);
   const[newCtxLabel,setNewCtxLabel]=useState("");
   const[recurrence,setRecurrence]=useState(item.recurrence??null);
+  const[subtasks,setSubtasks]=useState(item.subtasks??[]);
+  const[newSubLabel,setNewSubLabel]=useState("");
+  function addSub(){if(!newSubLabel.trim())return;setSubtasks(p=>[...p,{id:nid(),label:newSubLabel.trim(),done:false}]);setNewSubLabel("");}
+  function updateSubLabel(id,label){setSubtasks(p=>p.map(s=>s.id===id?{...s,label}:s));}
+  function toggleSub(id){setSubtasks(p=>p.map(s=>s.id===id?{...s,done:!s.done}:s));}
+  function deleteSub(id){setSubtasks(p=>p.filter(s=>s.id!==id));}
+  function moveSub(id,dir){const i=subtasks.findIndex(s=>s.id===id);const ni=i+dir;if(ni<0||ni>=subtasks.length)return;const arr=[...subtasks];[arr[i],arr[ni]]=[arr[ni],arr[i]];setSubtasks(arr);}
   const containers=items.filter(x=>x.type==="project"&&x.id!==item.id);
   function toggleCtx(key){setContexts(p=>p.includes(key)?p.filter(k=>k!==key):[...p,key]);}
   function addCustomCtx(){if(!newCtxLabel.trim())return;const key=newCtxLabel.trim().toLowerCase().replace(/\s+/g,"-");onAddContext({key,label:newCtxLabel.trim(),color:"#8b8378"});setContexts(p=>[...p,key]);setNewCtxLabel("");}
-  function save(){if(!title.trim())return;const rec=type==="task"&&recurrence?{...recurrence,seriesId:recurrence.seriesId||item.id||nid()}:null;onSave({...item,id:item.id??nid(),type,title:title.trim(),description:desc.trim(),status,waitingFor:status==="waiting"?waitingFor:"",priority:type==="task"?priority:null,size:type==="task"?size:null,dueDate:dueDate||null,doDate:type==="task"?(doDate||null):null,parentId:parentId||null,contexts,subtasks:item.subtasks??[],recurrence:rec});}
+  function save(){if(!title.trim())return;const rec=type==="task"&&recurrence?{...recurrence,seriesId:recurrence.seriesId||item.id||nid()}:null;onSave({...item,id:item.id??nid(),type,title:title.trim(),description:desc.trim(),status,waitingFor:status==="waiting"?waitingFor:"",priority:type==="task"?priority:null,size:type==="task"?size:null,dueDate:dueDate||null,doDate:type==="task"?(doDate||null):null,parentId:parentId||null,contexts,subtasks:type==="task"?subtasks:[],recurrence:rec});}
   const segBtn=(val,set,opts)=><div style={{display:"flex",flexWrap:"wrap",gap:4}}>{opts.map(o=><button key={o.key} onClick={()=>set(o.key)} style={{padding:"4px 10px",fontSize:11,cursor:"pointer",...sans,border:`1px solid ${val===o.key?C.ink:C.line}`,borderRadius:6,background:val===o.key?C.ink:"transparent",color:val===o.key?C.white:C.muted}}>{o.label}</button>)}</div>;
-  const STATUSES_USE=STATUSES_F;
   return(
     <div style={{position:"fixed",inset:0,zIndex:500,background:"rgba(0,0,0,0.35)",display:"flex",alignItems:"center",justifyContent:"center"}} onClick={e=>e.target===e.currentTarget&&onClose()}>
       <div style={{background:C.white,border:`1px solid ${C.line}`,borderRadius:16,padding:28,width:480,maxWidth:"95vw",maxHeight:"90vh",overflowY:"auto",boxShadow:"0 16px 48px rgba(0,0,0,.18)",display:"flex",flexDirection:"column",gap:14}}>
@@ -387,13 +376,31 @@ function ItemForm({item,items,allContexts,allStatuses,onSave,onClose,onAddContex
         <input value={title} onChange={e=>setTitle(e.target.value)} onKeyDown={e=>e.key==="Enter"&&save()} autoFocus placeholder={type==="project"?"Milestone or project…":"What needs to be done?"} style={{...serif,fontSize:17,color:C.ink,background:C.bg,border:`1px solid ${C.line}`,borderRadius:8,padding:"10px 12px",outline:"none",width:"100%"}}/>
         <textarea value={desc} onChange={e=>setDesc(e.target.value)} placeholder="Description (optional)…" rows={2} style={{...sans,fontSize:13,color:C.ink2,background:C.bg,border:`1px solid ${C.line}`,borderRadius:8,padding:"8px 12px",outline:"none",width:"100%",resize:"vertical"}}/>
         <div style={{display:"flex",gap:10,alignItems:"center"}}><div style={{...mono,fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:1,width:64}}>Parent</div><select value={parentId??""} onChange={e=>setParentId(e.target.value||null)} style={{...sans,flex:1,fontSize:13,color:C.ink,background:C.bg,border:`1px solid ${C.line}`,borderRadius:6,padding:"6px 8px",outline:"none"}}><option value="">— None —</option>{containers.map(c=><option key={c.id} value={c.id}>{c.title}</option>)}</select></div>
-        <div style={{display:"flex",gap:10,alignItems:"flex-start"}}><div style={{...mono,fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:1,width:64,paddingTop:6}}>Status</div><div style={{flex:1,display:"flex",flexDirection:"column",gap:6}}>{segBtn(status,setStatus,STATUSES_USE2)}{status==="waiting"&&<input value={waitingFor} onChange={e=>setWaiting(e.target.value)} placeholder="Waiting for who/what?" style={{...sans,fontSize:13,color:C.ink,background:C.bg,border:`1px solid ${C.line}`,borderRadius:6,padding:"6px 10px",outline:"none"}}/>}</div></div>
+        <div style={{display:"flex",gap:10,alignItems:"flex-start"}}><div style={{...mono,fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:1,width:64,paddingTop:6}}>Status</div><div style={{flex:1,display:"flex",flexDirection:"column",gap:6}}>{segBtn(status,setStatus,STATUSES_F)}{status==="waiting"&&<input value={waitingFor} onChange={e=>setWaiting(e.target.value)} placeholder="Waiting for who/what?" style={{...sans,fontSize:13,color:C.ink,background:C.bg,border:`1px solid ${C.line}`,borderRadius:6,padding:"6px 10px",outline:"none"}}/>}</div></div>
         <div style={{display:"flex",gap:10,alignItems:"flex-start"}}><div style={{...mono,fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:1,width:64,paddingTop:6}}>Context</div><div style={{flex:1,display:"flex",flexDirection:"column",gap:8}}><div style={{display:"flex",flexWrap:"wrap",gap:4}}>{allContexts.map(ctx=><button key={ctx.key} onClick={()=>toggleCtx(ctx.key)} style={{padding:"4px 10px",fontSize:11,cursor:"pointer",...sans,border:`1px solid ${contexts.includes(ctx.key)?C.ink:C.line}`,borderRadius:6,background:contexts.includes(ctx.key)?C.bg2:"transparent",color:contexts.includes(ctx.key)?C.ink2:C.muted}}>{ctx.label}</button>)}</div><div style={{display:"flex",gap:6}}><input value={newCtxLabel} onChange={e=>setNewCtxLabel(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addCustomCtx()} placeholder="Add custom context…" style={{...sans,flex:1,fontSize:12,color:C.ink,background:C.bg,border:`1px solid ${C.line}`,borderRadius:6,padding:"5px 8px",outline:"none"}}/><button onClick={addCustomCtx} style={{...sans,fontSize:12,background:"transparent",border:`1px solid ${C.line}`,borderRadius:6,padding:"5px 10px",cursor:"pointer",color:C.muted}}>Add</button></div></div></div>
         {type==="task"&&<>
           <div style={{display:"flex",gap:10,alignItems:"center"}}><div style={{...mono,fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:1,width:64}}>Priority</div><div style={{display:"flex",flexWrap:"wrap",gap:4}}>{PRIORITIES.map(o=><button key={o.key} onClick={()=>setPriority(p=>p===o.key?"":o.key)} style={{padding:"4px 10px",fontSize:11,cursor:"pointer",...sans,border:`1px solid ${priority===o.key?o.color:C.line}`,borderRadius:6,background:priority===o.key?`${o.color}20`:"transparent",color:priority===o.key?o.color:C.muted}}>{o.label}</button>)}{priority&&<button onClick={()=>setPriority("")} style={{padding:"4px 8px",fontSize:11,cursor:"pointer",...sans,border:`1px solid ${C.line}`,borderRadius:6,background:"transparent",color:C.muted}}>✕</button>}</div></div>
           <div style={{display:"flex",gap:10,alignItems:"center"}}><div style={{...mono,fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:1,width:64}}>Size</div>{segBtn(size,setSize,SIZES)}</div>
           <div style={{display:"flex",gap:10,alignItems:"center"}}><div style={{...mono,fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:1,width:64}}>Do date</div><input type="date" value={doDate} onChange={e=>setDoDate(e.target.value)} style={{...mono,fontSize:13,color:C.ink,background:C.bg,border:`1px solid ${C.line}`,borderRadius:6,padding:"5px 8px",outline:"none"}}/>{doDate&&<button onClick={()=>setDoDate("")} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:14}}>×</button>}</div>
           <RecurrenceSection recurrence={recurrence} onChange={setRecurrence}/>
+          <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+            <div style={{...mono,fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:1,width:64,paddingTop:6}}>Checklist</div>
+            <div style={{flex:1,display:"flex",flexDirection:"column",gap:6}}>
+              {subtasks.map((s,i)=>(
+                <div key={s.id} style={{display:"flex",alignItems:"center",gap:6}}>
+                  <button onClick={()=>toggleSub(s.id)} style={{width:16,height:16,borderRadius:4,flexShrink:0,cursor:"pointer",padding:0,border:`2px solid ${s.done?C.green:C.line2}`,background:s.done?C.green:"transparent",display:"flex",alignItems:"center",justifyContent:"center"}}>{s.done&&<span style={{color:"#fff",fontSize:9,lineHeight:1}}>✓</span>}</button>
+                  <input value={s.label} onChange={e=>updateSubLabel(s.id,e.target.value)} style={{...sans,flex:1,fontSize:13,color:s.done?C.muted:C.ink,textDecoration:s.done?"line-through":"none",background:C.bg,border:`1px solid ${C.line}`,borderRadius:6,padding:"4px 8px",outline:"none"}}/>
+                  <button onClick={()=>moveSub(s.id,-1)} disabled={i===0} style={{background:"transparent",border:"none",color:i===0?C.line2:C.muted,cursor:i===0?"default":"pointer",fontSize:12,padding:"0 2px"}}>↑</button>
+                  <button onClick={()=>moveSub(s.id,1)} disabled={i===subtasks.length-1} style={{background:"transparent",border:"none",color:i===subtasks.length-1?C.line2:C.muted,cursor:i===subtasks.length-1?"default":"pointer",fontSize:12,padding:"0 2px"}}>↓</button>
+                  <button onClick={()=>deleteSub(s.id)} style={{background:"transparent",border:"none",color:C.muted,cursor:"pointer",fontSize:14,padding:"0 2px"}}>×</button>
+                </div>
+              ))}
+              <div style={{display:"flex",gap:6}}>
+                <input value={newSubLabel} onChange={e=>setNewSubLabel(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();addSub();}}} placeholder="Add checklist item…" style={{...sans,flex:1,fontSize:13,color:C.ink,background:C.bg,border:`1px solid ${C.line}`,borderRadius:6,padding:"6px 8px",outline:"none"}}/>
+                <button onClick={addSub} style={{...sans,fontSize:12,background:"transparent",border:`1px solid ${C.line}`,borderRadius:6,padding:"6px 12px",cursor:"pointer",color:C.muted}}>Add</button>
+              </div>
+            </div>
+          </div>
         </>}
         <div style={{display:"flex",gap:10,alignItems:"center"}}><div style={{...mono,fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:1,width:64}}>Due date</div><input type="date" value={dueDate} onChange={e=>setDueDate(e.target.value)} style={{...mono,fontSize:13,color:C.ink,background:C.bg,border:`1px solid ${C.line}`,borderRadius:6,padding:"5px 8px",outline:"none"}}/>{dueDate&&<button onClick={()=>setDueDate("")} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:14}}>×</button>}</div>
         <div style={{display:"flex",gap:8,marginTop:4}}><button onClick={onClose} style={{flex:1,background:"transparent",border:`1px solid ${C.line}`,borderRadius:8,padding:"9px 0",fontSize:13,cursor:"pointer",...sans,color:C.muted}}>Cancel</button><button onClick={save} style={{flex:2,background:C.ink,color:C.white,border:"none",borderRadius:8,padding:"9px 0",fontSize:13,cursor:"pointer",...sans,fontWeight:600}}>{isNew?"Add item":"Save changes"}</button></div>
@@ -402,56 +409,12 @@ function ItemForm({item,items,allContexts,allStatuses,onSave,onClose,onAddContex
   );
 }
 
-function TreeItem({item,items,allContexts,depth,onEdit,onAdd,onDelete,onToggleSubtask,expanded,onToggleExpand,onEditDoDate}){
-  const children=getChildren(items,item.id);
-  const isExpanded=expanded.has(item.id);
-  const isProject=item.type==="project";
-  const isDone=item.status==="complete";
-  const pct=isProject?progressOf(items,item.id):null;
-  const rolledDo=isProject?rollupDoDate(items,item.id):null;
-  const pri=PRIORITIES.find(p=>p.key===item.priority);
-  const ctxTags=allContexts.filter(c=>item.contexts?.includes(c.key));
-  return(
-    <div>
-      <div style={{display:"flex",alignItems:"flex-start",gap:8,padding:"9px 10px",paddingLeft:4+depth*8,background:depth===0?C.white:"transparent",borderRadius:depth===0?10:0,border:depth===0?`1px solid ${C.line}`:"none",borderBottom:depth>0?`1px solid ${C.line}`:undefined,marginBottom:depth===0?6:0,opacity:isDone?0.55:1}}>
-        <button onClick={()=>children.length&&onToggleExpand(item.id)} style={{width:16,height:16,flexShrink:0,background:"transparent",border:"none",cursor:children.length?"pointer":"default",color:C.muted,fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",marginTop:3}}>{children.length?(isExpanded?"▾":"▸"):""}</button>
-        <span style={{fontSize:12,flexShrink:0,marginTop:2}}>{isProject?"◈":"○"}</span>
-        <div style={{flex:1,minWidth:0}}>
-          <div style={{display:"flex",alignItems:"baseline",gap:6,flexWrap:"wrap"}}>
-            <span style={{...serif,fontSize:depth===0?15:14,color:item.linked?C.muted:isDone?C.muted:C.ink,fontStyle:item.linked?"italic":"normal",textDecoration:isDone?"line-through":"none",cursor:"pointer"}} onDoubleClick={()=>onEdit(item)}>{item.recurrence&&<span title={item.linked?"Projected — will shift until locked in":"Recurring"} style={{fontSize:11,marginRight:4,opacity:item.linked?0.6:1}}>{item.linked?"⤳":"🔁"}</span>}{item.title}</span>
-          </div>
-          <div style={{display:"flex",gap:4,flexWrap:"wrap",marginTop:4,alignItems:"center"}}>
-            <StatusBadge status={item.status} waitingFor={item.waitingFor} small/>
-            {pri&&<span style={{...mono,fontSize:9,color:pri.color,border:`1px solid ${pri.color}40`,borderRadius:4,padding:"1px 5px",background:`${pri.color}15`}}>{pri.label}</span>}
-            {ctxTags.map(ctx=><ContextTag key={ctx.key} ctx={ctx} small/>)}
-            {!isProject&&item.doDate&&<DateBadge date={item.doDate} label="do" small/>}
-            {isProject&&<button onClick={()=>onEditDoDate(item)} style={{...mono,fontSize:9,background:"transparent",border:`1px solid ${C.line}`,borderRadius:5,padding:"1px 6px",cursor:"pointer",color:item.doDate?C.ink2:C.muted}}>{item.doDate?`do: ${fmtDate(item.doDate)}`:rolledDo?`do↑: ${fmtDate(rolledDo)}`:"set do"}</button>}
-            {item.dueDate&&<DateBadge date={item.dueDate} label="due" small/>}
-          </div>
-          {item.description&&<div style={{...sans,fontSize:12,color:C.muted,marginTop:3,lineHeight:1.4}}>{item.description}</div>}
-          {pct!==null&&<div style={{marginTop:6}}><ProgressBar pct={pct}/></div>}
-          {!isProject&&item.subtasks?.length>0&&<div style={{marginTop:6,display:"flex",flexDirection:"column",gap:3}}>{item.subtasks.map(st=><div key={st.id} style={{display:"flex",alignItems:"center",gap:6}}><button onClick={()=>onToggleSubtask(item.id,st.id)} style={{width:13,height:13,borderRadius:3,flexShrink:0,cursor:"pointer",padding:0,border:`2px solid ${st.done?C.green:C.line2}`,background:st.done?C.green:"transparent",display:"flex",alignItems:"center",justifyContent:"center"}}>{st.done&&<span style={{color:"#fff",fontSize:8,lineHeight:1}}>✓</span>}</button><span style={{...sans,fontSize:12,color:st.done?C.muted:C.ink2,textDecoration:st.done?"line-through":"none"}}>{st.label}</span></div>)}</div>}
-        </div>
-        <div style={{display:"flex",gap:3,flexShrink:0}}>
-          <button onClick={()=>onAdd(item.id)} style={{background:"transparent",border:`1px solid ${C.line}`,color:C.muted,borderRadius:6,padding:"2px 7px",fontSize:12,cursor:"pointer"}}>+</button>
-          <button onClick={()=>onEdit(item)} style={{background:"transparent",border:`1px solid ${C.line}`,color:C.muted,borderRadius:6,padding:"2px 7px",fontSize:11,cursor:"pointer"}}>✎</button>
-          <button onClick={()=>onDelete(item.id)} style={{background:"transparent",border:"none",color:C.muted,borderRadius:6,padding:"2px 5px",fontSize:14,cursor:"pointer"}}>×</button>
-        </div>
-      </div>
-      {isExpanded&&children.length>0&&<div style={{marginLeft:4+depth*8+18,borderLeft:`1px solid ${C.line}`}}>{children.map(child=><TreeItem key={child.id} item={child} items={items} allContexts={allContexts} depth={depth+1} onEdit={onEdit} onAdd={onAdd} onDelete={onDelete} onToggleSubtask={onToggleSubtask} expanded={expanded} onToggleExpand={onToggleExpand} onEditDoDate={onEditDoDate}/>)}<button onClick={()=>onAdd(item.id)} style={{display:"block",width:"100%",padding:"5px 0",margin:"2px 0",background:"transparent",border:`1px dashed ${C.line2}`,borderRadius:6,fontSize:11,color:C.muted,cursor:"pointer",...sans,textAlign:"center"}}>+ Add inside {item.title}</button></div>}
-    </div>
-  );
-}
-
-function ActionRow({item,items,allContexts,allStatuses,onEdit,onToggleStatus,onUpdate,onJumpTo}){
-  const STATUSES_USE=allStatuses||STATUSES;
-  const parent=items.find(x=>x.id===item.parentId);
-  const grandparent=parent?items.find(x=>x.id===parent.parentId):null;
+// ── Shared task card body — used by both ActionRow (Today/Do) and TreeItem (Plan) ──
+function TaskCardBody({item,allContexts,allStatuses,onEdit,onUpdate,onJumpTo,parent,grandparent,onToggleSubtask}){
   const pri=PRIORITIES.find(p=>p.key===item.priority);
   const ctxTags=allContexts.filter(c=>item.contexts?.includes(c.key));
   const isDone=item.status==="complete";
   const[openPop,setOpenPop]=useState(null);
-  const today=todayS();
   function toggle(pop){setOpenPop(p=>p===pop?null:pop);}
 
   function Popup({children}){
@@ -460,45 +423,151 @@ function ActionRow({item,items,allContexts,allStatuses,onEdit,onToggleStatus,onU
   function PopBtn({label,active,color,onClick}){
     return <button onClick={onClick} style={{display:"block",width:"100%",padding:"6px 12px",border:"none",textAlign:"left",fontSize:12,...sans,cursor:"pointer",background:active?C.bg2:"transparent",color:color||C.ink2}}>{label}</button>;
   }
+  const statusList=allStatuses||STATUSES;
+  const statusObj=statusList.find(s=>s.key===item.status)||statusList[0];
+  function toggleSub(subId){
+    if(onToggleSubtask){onToggleSubtask(item.id,subId);return;}
+    if(onUpdate){
+      onUpdate(item.id,{subtasks:(item.subtasks||[]).map(s=>s.id===subId?{...s,done:!s.done}:s)});
+    }
+  }
 
   return(
-    <div style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 12px",background:item.linked?C.bg:C.white,border:`1px ${item.linked?"dashed":"solid"} ${C.line}`,borderRadius:10,opacity:isDone?0.6:item.linked?0.75:1,position:"relative"}} onClick={e=>{if(!e.target.closest("[data-pop]"))setOpenPop(null);}}>
-      <button onClick={()=>onToggleStatus(item.id)} style={{width:18,height:18,borderRadius:4,flexShrink:0,marginTop:3,cursor:"pointer",padding:0,border:`2px solid ${isDone?C.green:C.line2}`,background:isDone?C.green:"transparent",display:"flex",alignItems:"center",justifyContent:"center"}}>{isDone&&<span style={{color:"#fff",fontSize:10}}>✓</span>}</button>
-
-      <div style={{flex:1,minWidth:0}}>
-        {/* Row 1: priority pill + title */}
-        <div style={{display:"flex",alignItems:"baseline",gap:6}}>
-          <div style={{position:"relative",flexShrink:0}} data-pop="1">
-            <button onClick={()=>toggle("priority")} style={{...mono,fontSize:10,fontWeight:700,cursor:"pointer",border:`1px solid ${pri?`${pri.color}50`:C.line}`,borderRadius:5,padding:"0px 5px",lineHeight:"20px",background:pri?`${pri.color}18`:C.bg2,color:pri?pri.color:C.muted,verticalAlign:"baseline"}}>{pri?pri.label:"·"}</button>
-            {openPop==="priority"&&<Popup>{PRIORITIES.map(p=><PopBtn key={p.key} label={p.label} active={item.priority===p.key} color={p.color} onClick={()=>{onUpdate(item.id,{priority:p.key});setOpenPop(null);}}/>)}<PopBtn label="— none" active={!item.priority} color={C.muted} onClick={()=>{onUpdate(item.id,{priority:null});setOpenPop(null);}}/></Popup>}
-          </div>
-          <div style={{...serif,fontSize:14,color:item.linked?C.muted:isDone?C.muted:C.ink,fontStyle:item.linked?"italic":"normal",textDecoration:isDone?"line-through":"none",cursor:"pointer",flex:1}} onDoubleClick={()=>onEdit(item)}>{item.recurrence&&<span title={item.linked?"Projected — will shift until locked in":"Recurring"} style={{fontSize:11,marginRight:4,opacity:item.linked?0.6:1}}>{item.linked?"⤳":"🔁"}</span>}{item.title}</div>
+    <div style={{flex:1,minWidth:0}} onClick={e=>{if(!e.target.closest("[data-pop]"))setOpenPop(null);}}>
+      {/* Row 1: priority pill + title */}
+      <div style={{display:"flex",alignItems:"baseline",gap:6}}>
+        <div style={{position:"relative",flexShrink:0}} data-pop="1">
+          <button onClick={()=>toggle("priority")} style={{...mono,fontSize:10,fontWeight:700,cursor:"pointer",border:`1px solid ${pri?`${pri.color}50`:C.line}`,borderRadius:5,padding:"0px 5px",lineHeight:"20px",background:pri?`${pri.color}18`:C.bg2,color:pri?pri.color:C.muted,verticalAlign:"baseline"}}>{pri?pri.label:"·"}</button>
+          {openPop==="priority"&&<Popup>{PRIORITIES.map(p=><PopBtn key={p.key} label={p.label} active={item.priority===p.key} color={p.color} onClick={()=>{onUpdate(item.id,{priority:p.key});setOpenPop(null);}}/>)}<PopBtn label="— none" active={!item.priority} color={C.muted} onClick={()=>{onUpdate(item.id,{priority:null});setOpenPop(null);}}/></Popup>}
         </div>
-
-        {/* Rows 2+3: breadcrumb immediately above dates, zero gap */}
-        <div style={{paddingLeft:38,marginTop:1}}>
-          {parent&&<div style={{...mono,fontSize:9,color:C.muted,lineHeight:1.4,marginBottom:3,display:"flex",alignItems:"center",gap:3,flexWrap:"wrap"}}>{grandparent&&<><button onClick={()=>onJumpTo&&onJumpTo(grandparent.id)} style={{...mono,fontSize:9,background:"transparent",border:"none",color:C.muted,cursor:"pointer",padding:0,textDecoration:"underline",textDecorationStyle:"dotted"}}>{grandparent.title}</button><span style={{color:C.line2}}>›</span></>}<button onClick={()=>onJumpTo&&onJumpTo(parent.id)} style={{...mono,fontSize:9,background:"transparent",border:"none",color:C.muted,cursor:"pointer",padding:0,textDecoration:"underline",textDecorationStyle:"dotted"}}>{parent.title}</button></div>}
-          <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:3}}>
-            <button onClick={()=>toggle("doDate")} style={{...mono,fontSize:10,cursor:"pointer",background:"transparent",border:"none",padding:0,color:C.muted,lineHeight:1}} data-pop="1">{item.doDate?`do ${smartDate(item.doDate)}`:"set do"}</button>
-            {openPop==="doDate"&&<div style={{position:"absolute",top:0,left:0,zIndex:50,background:C.white,border:`1px solid ${C.line}`,borderRadius:8,boxShadow:"0 4px 16px rgba(0,0,0,.12)",minWidth:140,overflow:"hidden",padding:8,display:"flex",flexDirection:"column",gap:6}} data-pop="1"><input type="date" defaultValue={item.doDate||""} onChange={e=>onUpdate(item.id,{doDate:e.target.value||null})} style={{...mono,fontSize:12,color:C.ink,background:C.bg,border:`1px solid ${C.line}`,borderRadius:6,padding:"4px 6px",outline:"none"}}/>{item.doDate&&<button onClick={()=>{onUpdate(item.id,{doDate:null});setOpenPop(null);}} style={{fontSize:11,color:C.muted,background:"transparent",border:"none",cursor:"pointer",...sans}}>Clear</button>}</div>}
-            <span style={{color:C.line2,fontSize:10,lineHeight:1,display:"inline-block",verticalAlign:"middle"}}>·</span>
-            <button onClick={()=>toggle("dueDate")} style={{...mono,fontSize:10,cursor:"pointer",background:"transparent",border:"none",padding:0,color:C.muted,lineHeight:1}} data-pop="1">{item.dueDate?`due ${smartDate(item.dueDate)}`:"set due"}</button>
-            {openPop==="dueDate"&&<div style={{position:"absolute",top:0,left:0,zIndex:50,background:C.white,border:`1px solid ${C.line}`,borderRadius:8,boxShadow:"0 4px 16px rgba(0,0,0,.12)",minWidth:140,overflow:"hidden",padding:8,display:"flex",flexDirection:"column",gap:6}} data-pop="1"><input type="date" defaultValue={item.dueDate||""} onChange={e=>onUpdate(item.id,{dueDate:e.target.value||null})} style={{...mono,fontSize:12,color:C.ink,background:C.bg,border:`1px solid ${C.line}`,borderRadius:6,padding:"4px 6px",outline:"none"}}/>{item.dueDate&&<button onClick={()=>{onUpdate(item.id,{dueDate:null});setOpenPop(null);}} style={{fontSize:11,color:C.muted,background:"transparent",border:"none",cursor:"pointer",...sans}}>Clear</button>}</div>}
-          </div>
-        </div>
-
-        {/* Row 4: status + contexts */}
-        <div style={{display:"flex",gap:4,flexWrap:"wrap",marginTop:4,paddingLeft:38,alignItems:"center"}}>
-          <div style={{position:"relative",display:"flex",alignItems:"center"}} data-pop="1">
-            <button onClick={()=>toggle("status")} style={{...sans,fontSize:10,cursor:"pointer",border:`1px solid ${STATUSES.find(s=>s.key===item.status)?.color}35`,borderRadius:5,padding:"2px 8px",fontWeight:500,background:`${STATUSES.find(s=>s.key===item.status)?.color}12`,color:STATUSES.find(s=>s.key===item.status)?.color}}>{item.status==="waiting"&&item.waitingFor?`Waiting: ${item.waitingFor}`:STATUSES.find(s=>s.key===item.status)?.label}</button>
-            {openPop==="status"&&<Popup>{STATUSES_USE.map(s=><PopBtn key={s.key} label={s.label} active={item.status===s.key} color={s.color} onClick={()=>{onUpdate(item.id,{status:s.key});setOpenPop(null);}}/>)}</Popup>}
-          </div>
-          {ctxTags.map(ctx=><ContextTag key={ctx.key} ctx={ctx} small/>)}
-        </div>
-
-        {item.subtasks?.length>0&&<div style={{...mono,fontSize:9,color:C.muted,marginTop:3,paddingLeft:38}}>{item.subtasks.filter(s=>s.done).length}/{item.subtasks.length} subtasks done</div>}
+        <EditableText text={item.title} onSave={t=>onUpdate&&onUpdate(item.id,{title:t})} style={{...serif,fontSize:14,color:item.linked?C.muted:isDone?C.muted:C.ink,fontStyle:item.linked?"italic":"normal",textDecoration:isDone?"line-through":"none",flex:1}}>
+          {item.recurrence&&<span title={item.linked?"Projected — will shift until locked in":"Recurring"} style={{fontSize:11,marginRight:4,opacity:item.linked?0.6:1}}>{item.linked?"⤳":"🔁"}</span>}
+        </EditableText>
       </div>
+
+      {/* Rows 2+3: breadcrumb + do/due dates */}
+      <div style={{paddingLeft:38,marginTop:1}}>
+        {parent&&<div style={{...mono,fontSize:9,color:C.muted,lineHeight:1.4,marginBottom:3,display:"flex",alignItems:"center",gap:3,flexWrap:"wrap"}}>{grandparent&&<><button onClick={()=>onJumpTo&&onJumpTo(grandparent.id)} style={{...mono,fontSize:9,background:"transparent",border:"none",color:C.muted,cursor:"pointer",padding:0,textDecoration:"underline",textDecorationStyle:"dotted"}}>{grandparent.title}</button><span style={{color:C.line2}}>›</span></>}<button onClick={()=>onJumpTo&&onJumpTo(parent.id)} style={{...mono,fontSize:9,background:"transparent",border:"none",color:C.muted,cursor:"pointer",padding:0,textDecoration:"underline",textDecorationStyle:"dotted"}}>{parent.title}</button></div>}
+        <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:3}}>
+          <button onClick={()=>toggle("doDate")} style={{...mono,fontSize:10,cursor:"pointer",background:"transparent",border:"none",padding:0,color:C.muted,lineHeight:1}} data-pop="1">{item.doDate?`do ${smartDate(item.doDate)}`:"set do"}</button>
+          {openPop==="doDate"&&<div style={{position:"absolute",top:0,left:0,zIndex:50,background:C.white,border:`1px solid ${C.line}`,borderRadius:8,boxShadow:"0 4px 16px rgba(0,0,0,.12)",minWidth:140,overflow:"hidden",padding:8,display:"flex",flexDirection:"column",gap:6}} data-pop="1"><input type="date" defaultValue={item.doDate||""} onChange={e=>onUpdate(item.id,{doDate:e.target.value||null})} style={{...mono,fontSize:12,color:C.ink,background:C.bg,border:`1px solid ${C.line}`,borderRadius:6,padding:"4px 6px",outline:"none"}}/>{item.doDate&&<button onClick={()=>{onUpdate(item.id,{doDate:null});setOpenPop(null);}} style={{fontSize:11,color:C.muted,background:"transparent",border:"none",cursor:"pointer",...sans}}>Clear</button>}</div>}
+          <span style={{color:C.line2,fontSize:10,lineHeight:1,display:"inline-block",verticalAlign:"middle"}}>·</span>
+          <button onClick={()=>toggle("dueDate")} style={{...mono,fontSize:10,cursor:"pointer",background:"transparent",border:"none",padding:0,color:C.muted,lineHeight:1}} data-pop="1">{item.dueDate?`due ${smartDate(item.dueDate)}`:"set due"}</button>
+          {openPop==="dueDate"&&<div style={{position:"absolute",top:0,left:0,zIndex:50,background:C.white,border:`1px solid ${C.line}`,borderRadius:8,boxShadow:"0 4px 16px rgba(0,0,0,.12)",minWidth:140,overflow:"hidden",padding:8,display:"flex",flexDirection:"column",gap:6}} data-pop="1"><input type="date" defaultValue={item.dueDate||""} onChange={e=>onUpdate(item.id,{dueDate:e.target.value||null})} style={{...mono,fontSize:12,color:C.ink,background:C.bg,border:`1px solid ${C.line}`,borderRadius:6,padding:"4px 6px",outline:"none"}}/>{item.dueDate&&<button onClick={()=>{onUpdate(item.id,{dueDate:null});setOpenPop(null);}} style={{fontSize:11,color:C.muted,background:"transparent",border:"none",cursor:"pointer",...sans}}>Clear</button>}</div>}
+        </div>
+      </div>
+
+      {/* Row 4: status + contexts */}
+      <div style={{display:"flex",gap:4,flexWrap:"wrap",marginTop:4,paddingLeft:38,alignItems:"center"}}>
+        <div style={{position:"relative",display:"flex",alignItems:"center"}} data-pop="1">
+          <button onClick={()=>toggle("status")} style={{...sans,fontSize:10,cursor:"pointer",border:`1px solid ${statusObj.color}35`,borderRadius:5,padding:"2px 8px",fontWeight:500,background:`${statusObj.color}12`,color:statusObj.color}}>{item.status==="waiting"&&item.waitingFor?`Waiting: ${item.waitingFor}`:statusObj.label}</button>
+          {openPop==="status"&&<Popup>{statusList.map(s=><PopBtn key={s.key} label={s.label} active={item.status===s.key} color={s.color} onClick={()=>{onUpdate(item.id,{status:s.key});setOpenPop(null);}}/>)}</Popup>}
+        </div>
+        {ctxTags.map(ctx=><ContextTag key={ctx.key} ctx={ctx} small/>)}
+      </div>
+
+      {item.subtasks?.length>0&&(
+        <div style={{marginTop:4,paddingLeft:38,display:"flex",flexDirection:"column",gap:3}}>
+          {item.subtasks.map(st=>(
+            <div key={st.id} style={{display:"flex",alignItems:"center",gap:6}}>
+              <button onClick={()=>toggleSub(st.id)} style={{width:13,height:13,borderRadius:3,flexShrink:0,cursor:"pointer",padding:0,border:`2px solid ${st.done?C.green:C.line2}`,background:st.done?C.green:"transparent",display:"flex",alignItems:"center",justifyContent:"center"}}>{st.done&&<span style={{color:"#fff",fontSize:8,lineHeight:1}}>✓</span>}</button>
+              <span style={{...sans,fontSize:12,color:st.done?C.muted:C.ink2,textDecoration:st.done?"line-through":"none"}}>{st.label}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── ActionRow (Today / Do views) ──────────────────────────────────────────────
+function ActionRow({item,items,allContexts,allStatuses,onEdit,onToggleStatus,onUpdate,onJumpTo,onToggleSubtask}){
+  const parent=items.find(x=>x.id===item.parentId);
+  const grandparent=parent?items.find(x=>x.id===parent.parentId):null;
+  const isDone=item.status==="complete";
+  return(
+    <div style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 12px",background:item.linked?C.bg:C.white,border:`1px ${item.linked?"dashed":"solid"} ${C.line}`,borderRadius:10,opacity:isDone?0.6:item.linked?0.75:1,position:"relative"}}>
+      <button onClick={()=>onToggleStatus(item.id)} style={{width:18,height:18,borderRadius:4,flexShrink:0,marginTop:3,cursor:"pointer",padding:0,border:`2px solid ${isDone?C.green:C.line2}`,background:isDone?C.green:"transparent",display:"flex",alignItems:"center",justifyContent:"center"}}>{isDone&&<span style={{color:"#fff",fontSize:10}}>✓</span>}</button>
+      <TaskCardBody item={item} allContexts={allContexts} allStatuses={allStatuses} onEdit={onEdit} onUpdate={onUpdate} onJumpTo={onJumpTo} parent={parent} grandparent={grandparent} onToggleSubtask={onToggleSubtask}/>
       <button onClick={()=>onEdit(item)} style={{background:"transparent",border:"none",color:C.muted,cursor:"pointer",fontSize:13,padding:0,marginTop:2}}>✎</button>
+    </div>
+  );
+}
+
+// ── TreeItem (Plan view) — now uses same card body as ActionRow ─────────────
+function TreeItem({item,items,allContexts,allStatuses,depth,onEdit,onAdd,onDelete,onToggleSubtask,expanded,onToggleExpand,onEditDoDate,onUpdate,onJumpTo}){
+  const children=getChildren(items,item.id);
+  const isExpanded=expanded.has(item.id);
+  const isProject=item.type==="project";
+  const isDone=item.status==="complete";
+  const pct=isProject?progressOf(items,item.id):null;
+  const rolledDo=isProject?rollupDoDate(items,item.id):null;
+
+  if(isProject){
+    return(
+      <div>
+        <div style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 12px",background:C.white,border:`1px solid ${C.line}`,borderRadius:10,marginLeft:depth*18}}>
+          <button onClick={()=>children.length&&onToggleExpand(item.id)} style={{width:18,height:18,flexShrink:0,marginTop:3,fontSize:12,color:C.muted,background:"transparent",border:"none",cursor:children.length?"pointer":"default",padding:0,display:"flex",alignItems:"center",justifyContent:"center"}}>{children.length?(isExpanded?"▾":"▸"):"◈"}</button>
+          <div style={{flex:1,minWidth:0}}>
+            {/* Row 1: title (no priority pill for projects) */}
+            <div style={{display:"flex",alignItems:"baseline",gap:6}}>
+              <EditableText text={item.title} onSave={t=>onUpdate?onUpdate(item.id,{title:t}):onEdit&&onEdit({...item,title:t})} style={{...serif,fontSize:14,color:C.ink,flex:1}}>
+                <span style={{fontSize:11,marginRight:4,opacity:0.7}}>◈</span>
+              </EditableText>
+            </div>
+
+            {/* Row 2+3: description as "breadcrumb" analog + do/due dates */}
+            <div style={{paddingLeft:18,marginTop:1}}>
+              {item.description&&<div style={{...mono,fontSize:9,color:C.muted,lineHeight:1.4,marginBottom:3}}>{item.description}</div>}
+              <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:3}}>
+                <button onClick={()=>onEditDoDate(item)} style={{...mono,fontSize:10,cursor:"pointer",background:"transparent",border:"none",padding:0,color:C.muted,lineHeight:1}}>{item.doDate?`do ${fmtDate(item.doDate)}`:rolledDo?`do↑ ${fmtDate(rolledDo)}`:"set do"}</button>
+                <span style={{color:C.line2,fontSize:10,lineHeight:1}}>·</span>
+                <span style={{...mono,fontSize:10,color:C.muted,lineHeight:1}}>{item.dueDate?`due ${fmtDate(item.dueDate)}`:"no due"}</span>
+              </div>
+            </div>
+
+            {/* Row 4: status */}
+            <div style={{display:"flex",gap:4,flexWrap:"wrap",marginTop:4,paddingLeft:18,alignItems:"center"}}>
+              <StatusBadge status={item.status} waitingFor={item.waitingFor} small allStatuses={allStatuses}/>
+            </div>
+
+            {pct!==null&&<div style={{marginTop:8,paddingLeft:18}}><ProgressBar pct={pct}/></div>}
+          </div>
+          <div style={{display:"flex",gap:3,flexShrink:0,marginTop:2}}>
+            <button onClick={()=>onAdd(item.id)} style={{background:"transparent",border:`1px solid ${C.line}`,color:C.muted,borderRadius:6,padding:"2px 7px",fontSize:12,cursor:"pointer"}}>+</button>
+            <button onClick={()=>onEdit(item)} style={{background:"transparent",border:"none",color:C.muted,cursor:"pointer",fontSize:13,padding:0}}>✎</button>
+            <button onClick={()=>onDelete(item.id)} style={{background:"transparent",border:"none",color:C.muted,borderRadius:6,padding:"2px 5px",fontSize:14,cursor:"pointer"}}>×</button>
+          </div>
+        </div>
+        {isExpanded&&children.length>0&&(
+          <div style={{marginTop:6,marginLeft:depth*18+18,display:"flex",flexDirection:"column",gap:6}}>
+            {children.map(child=><TreeItem key={child.id} item={child} items={items} allContexts={allContexts} allStatuses={allStatuses} depth={depth+1} onEdit={onEdit} onAdd={onAdd} onDelete={onDelete} onToggleSubtask={onToggleSubtask} expanded={expanded} onToggleExpand={onToggleExpand} onEditDoDate={onEditDoDate} onUpdate={onUpdate} onJumpTo={onJumpTo}/>)}
+            <button onClick={()=>onAdd(item.id)} style={{display:"block",width:"100%",padding:"6px 0",background:"transparent",border:`1px dashed ${C.line2}`,borderRadius:6,fontSize:12,color:C.muted,cursor:"pointer",...sans,textAlign:"center"}}>+ Add inside {item.title}</button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Task-level item — same card look as ActionRow (Today dashboard)
+  const parent=items.find(x=>x.id===item.parentId);
+  const grandparent=parent?items.find(x=>x.id===parent.parentId):null;
+  return(
+    <div style={{marginLeft:depth*18}}>
+      <div style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 12px",background:item.linked?C.bg:C.white,border:`1px ${item.linked?"dashed":"solid"} ${C.line}`,borderRadius:10,opacity:isDone?0.6:item.linked?0.75:1,position:"relative"}}>
+        <button onClick={()=>onToggleSubtask&&onUpdate&&onUpdate(item.id,{status:isDone?"actionable":"complete"})} style={{width:18,height:18,borderRadius:4,flexShrink:0,marginTop:3,cursor:"pointer",padding:0,border:`2px solid ${isDone?C.green:C.line2}`,background:isDone?C.green:"transparent",display:"flex",alignItems:"center",justifyContent:"center"}}>{isDone&&<span style={{color:"#fff",fontSize:10}}>✓</span>}</button>
+        <TaskCardBody item={item} allContexts={allContexts} allStatuses={allStatuses} onEdit={onEdit} onUpdate={onUpdate} onJumpTo={onJumpTo} parent={parent} grandparent={grandparent} onToggleSubtask={onToggleSubtask}/>
+        <div style={{display:"flex",gap:3,flexShrink:0,marginTop:2}}>
+          <button onClick={()=>onAdd(item.id)} style={{background:"transparent",border:`1px solid ${C.line}`,color:C.muted,borderRadius:6,padding:"2px 7px",fontSize:12,cursor:"pointer"}}>+</button>
+          <button onClick={()=>onEdit(item)} style={{background:"transparent",border:"none",color:C.muted,cursor:"pointer",fontSize:13,padding:0}}>✎</button>
+          <button onClick={()=>onDelete(item.id)} style={{background:"transparent",border:"none",color:C.muted,borderRadius:6,padding:"2px 5px",fontSize:14,cursor:"pointer"}}>×</button>
+        </div>
+      </div>
+      {isExpanded&&children.length>0&&(
+        <div style={{marginTop:6,marginLeft:18,display:"flex",flexDirection:"column",gap:6}}>
+          {children.map(child=><TreeItem key={child.id} item={child} items={items} allContexts={allContexts} allStatuses={allStatuses} depth={depth+1} onEdit={onEdit} onAdd={onAdd} onDelete={onDelete} onToggleSubtask={onToggleSubtask} expanded={expanded} onToggleExpand={onToggleExpand} onEditDoDate={onEditDoDate} onUpdate={onUpdate} onJumpTo={onJumpTo}/>)}
+        </div>
+      )}
     </div>
   );
 }
@@ -517,7 +586,7 @@ function DoDateModal({item,onSave,onClose}){
   );
 }
 
-function ProjectPopup({projectId,items,allContexts,onClose,onEdit,onAdd,onDelete,onToggleSubtask,onEditDoDate,expanded,onToggleExpand}){
+function ProjectPopup({projectId,items,allContexts,allStatuses,onClose,onEdit,onAdd,onDelete,onToggleSubtask,onEditDoDate,expanded,onToggleExpand,onUpdate,onJumpTo}){
   const project=items.find(x=>x.id===projectId);
   if(!project)return null;
   const pct=progressOf(items,projectId);
@@ -531,17 +600,20 @@ function ProjectPopup({projectId,items,allContexts,onClose,onEdit,onAdd,onDelete
               <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}><span style={{fontSize:14,color:C.muted}}>◈</span><div style={{...serif,fontSize:22,color:C.ink,lineHeight:1.2}}>{project.title}</div></div>
               {project.description&&<div style={{...sans,fontSize:13,color:C.muted,marginTop:4,lineHeight:1.5}}>{project.description}</div>}
               <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:8,alignItems:"center"}}>
-                <StatusBadge status={project.status} waitingFor={project.waitingFor}/>
-                <button onClick={()=>onEditDoDate(project)} style={{...mono,fontSize:10,background:"transparent",border:`1px solid ${C.line}`,borderRadius:5,padding:"2px 7px",cursor:"pointer",color:project.doDate?C.ink2:C.muted}}>{project.doDate?`do: ${fmtDate(project.doDate)}`:rolledDo?`do↑: ${fmtDate(rolledDo)}`:"set do date"}</button>
-                {project.dueDate&&<DateBadge date={project.dueDate} label="due"/>}
+                <StatusBadge status={project.status} waitingFor={project.waitingFor} allStatuses={allStatuses}/>
+              </div>
+              <div style={{display:"flex",gap:6,alignItems:"center",marginTop:6}}>
+                <button onClick={()=>onEditDoDate(project)} style={{...mono,fontSize:10,cursor:"pointer",background:"transparent",border:"none",padding:0,color:C.muted,lineHeight:1}}>{project.doDate?`do ${fmtDate(project.doDate)}`:rolledDo?`do↑ ${fmtDate(rolledDo)}`:"set do"}</button>
+                <span style={{color:C.line2,fontSize:10,lineHeight:1}}>·</span>
+                <span style={{...mono,fontSize:10,color:C.muted,lineHeight:1}}>{project.dueDate?`due ${fmtDate(project.dueDate)}`:"no due"}</span>
               </div>
               {pct!==null&&<div style={{marginTop:10}}><ProgressBar pct={pct}/></div>}
             </div>
             <div style={{display:"flex",gap:6,flexShrink:0}}><button onClick={()=>onEdit(project)} style={{...sans,fontSize:12,background:"transparent",border:`1px solid ${C.line}`,borderRadius:7,padding:"5px 12px",cursor:"pointer",color:C.ink2}}>Edit</button><button onClick={onClose} style={{background:"transparent",border:"none",color:C.muted,fontSize:22,cursor:"pointer",padding:0,lineHeight:1}}>×</button></div>
           </div>
         </div>
-        <div style={{flex:1,overflowY:"auto",padding:"14px 20px",display:"flex",flexDirection:"column",gap:4}}>
-          {getChildren(items,projectId).map(child=><TreeItem key={child.id} item={child} items={items} allContexts={allContexts} depth={0} onEdit={onEdit} onAdd={onAdd} onDelete={onDelete} onToggleSubtask={onToggleSubtask} expanded={expanded} onToggleExpand={onToggleExpand} onEditDoDate={onEditDoDate}/>)}
+        <div style={{flex:1,overflowY:"auto",padding:"14px 20px",display:"flex",flexDirection:"column",gap:6}}>
+          {getChildren(items,projectId).map(child=><TreeItem key={child.id} item={child} items={items} allContexts={allContexts} allStatuses={allStatuses} depth={0} onEdit={onEdit} onAdd={onAdd} onDelete={onDelete} onToggleSubtask={onToggleSubtask} expanded={expanded} onToggleExpand={onToggleExpand} onEditDoDate={onEditDoDate} onUpdate={onUpdate} onJumpTo={onJumpTo}/>)}
           <button onClick={()=>onAdd(projectId)} style={{width:"100%",padding:"8px 0",marginTop:4,background:"transparent",border:`1px dashed ${C.line2}`,borderRadius:8,fontSize:12,color:C.muted,cursor:"pointer",...sans}}>+ Add task</button>
         </div>
       </div>
@@ -564,7 +636,7 @@ function DashPanel({title,icon,items,allItems,allContexts,allStatuses,onEdit,onT
   );
 }
 
-function MilestonePanel({items,allContexts,onEdit,onEditDoDate}){
+function MilestonePanel({items,allContexts,allStatuses,onEdit,onEditDoDate,onUpdate}){
   const projects=items.filter(x=>x.type==="project"&&x.status!=="complete"&&x.status!=="someday");
   return(
     <div style={{background:C.white,border:`1px solid ${C.line}`,borderRadius:12,display:"flex",flexDirection:"column",minHeight:200,overflow:"hidden"}}>
@@ -578,20 +650,26 @@ function MilestonePanel({items,allContexts,onEdit,onEditDoDate}){
           const pct=progressOf(items,item.id);
           const rolledDo=rollupDoDate(items,item.id);
           return(
-            <div key={item.id} style={{padding:"9px 10px",background:C.bg,borderRadius:8,border:`1px solid ${C.line}`,display:"flex",flexDirection:"column",gap:5}}>
-              <div style={{display:"flex",alignItems:"flex-start",gap:6}}>
-                <span style={{fontSize:11,color:C.muted,marginTop:2}}>◈</span>
-                <div style={{flex:1}}>
-                  <div style={{...serif,fontSize:14,color:C.ink,cursor:"pointer"}} onDoubleClick={()=>onEdit(item)}>{item.title}</div>
-                  <div style={{display:"flex",gap:4,flexWrap:"wrap",marginTop:4}}>
-                    <StatusBadge status={item.status} waitingFor={item.waitingFor} small/>
-                    <button onClick={()=>onEditDoDate(item)} style={{...mono,fontSize:9,background:"transparent",border:`1px solid ${C.line}`,borderRadius:5,padding:"1px 6px",cursor:"pointer",color:item.doDate?C.ink2:C.muted}}>{item.doDate?`do: ${fmtDate(item.doDate)}`:rolledDo?`do↑: ${fmtDate(rolledDo)}`:"set do"}</button>
-                    {item.dueDate&&<DateBadge date={item.dueDate} label="due" small/>}
+            <div key={item.id} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 12px",background:C.white,border:`1px solid ${C.line}`,borderRadius:10}}>
+              <div style={{width:18,flexShrink:0,marginTop:3,fontSize:12,color:C.muted,textAlign:"center"}}>◈</div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{display:"flex",alignItems:"baseline",gap:6}}>
+                  <EditableText text={item.title} onSave={t=>onUpdate?onUpdate(item.id,{title:t}):onEdit&&onEdit({...item,title:t})} style={{...serif,fontSize:14,color:C.ink,flex:1}} />
+                </div>
+                <div style={{paddingLeft:18,marginTop:1}}>
+                  {item.description&&<div style={{...mono,fontSize:9,color:C.muted,lineHeight:1.4,marginBottom:3}}>{item.description}</div>}
+                  <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:3}}>
+                    <button onClick={()=>onEditDoDate(item)} style={{...mono,fontSize:10,cursor:"pointer",background:"transparent",border:"none",padding:0,color:C.muted,lineHeight:1}}>{item.doDate?`do ${fmtDate(item.doDate)}`:rolledDo?`do↑ ${fmtDate(rolledDo)}`:"set do"}</button>
+                    <span style={{color:C.line2,fontSize:10,lineHeight:1}}>·</span>
+                    <span style={{...mono,fontSize:10,color:C.muted,lineHeight:1}}>{item.dueDate?`due ${fmtDate(item.dueDate)}`:"no due"}</span>
                   </div>
                 </div>
-                <button onClick={()=>onEdit(item)} style={{background:"transparent",border:"none",color:C.muted,cursor:"pointer",fontSize:12}}>✎</button>
+                <div style={{display:"flex",gap:4,flexWrap:"wrap",marginTop:4,paddingLeft:18,alignItems:"center"}}>
+                  <StatusBadge status={item.status} waitingFor={item.waitingFor} small allStatuses={allStatuses}/>
+                </div>
+                {pct!==null&&<div style={{marginTop:8,paddingLeft:18}}><ProgressBar pct={pct}/></div>}
               </div>
-              {pct!==null&&<ProgressBar pct={pct}/>}
+              <button onClick={()=>onEdit(item)} style={{background:"transparent",border:"none",color:C.muted,cursor:"pointer",fontSize:13,padding:0,marginTop:2}}>✎</button>
             </div>
           );
         })}
@@ -599,7 +677,6 @@ function MilestonePanel({items,allContexts,onEdit,onEditDoDate}){
     </div>
   );
 }
-
 
 function SettingsModal({contexts,statuses,onUpdateContext,onDeleteContext,onAddContext,onUpdateStatus,onDeleteStatus,onAddStatus,onClose}){
   const[tab,setTab]=useState("contexts");
@@ -722,7 +799,6 @@ export default function Focus(){
     setItems(prev=>{
       let result=[...prev];
       const today=todayS();
-      // Ensure every recurring task has a seriesId (assign on the original if missing)
       result=result.map(x=>{
         if(x.recurrence&&!x.recurrence.seriesId){
           return {...x,recurrence:{...x.recurrence,seriesId:x.id}};
@@ -732,7 +808,6 @@ export default function Focus(){
 
       const additions=[];
 
-      // ── Fixed schedule: independent instances, window kept full ──
       const fixedTasks=result.filter(x=>x.recurrence&&x.recurrence.trigger==="fixed"&&x.status!=="complete");
       const seenFixedSeries=new Set();
       for(const task of fixedTasks){
@@ -755,7 +830,6 @@ export default function Focus(){
           }
         }
       }
-      // Fixed-schedule tasks whose doDate has passed spawn the next one immediately
       const passedFixed=result.filter(x=>x.recurrence&&x.recurrence.trigger==="fixed"&&x.doDate&&x.doDate<today);
       for(const task of passedFixed){
         const seriesId=task.recurrence.seriesId;
@@ -767,9 +841,6 @@ export default function Focus(){
         }
       }
 
-      // ── On completion: linked projection chain, window kept full ──
-      // Each series has exactly one "live" (unlocked) instance at any time — the front of the chain.
-      // Projected instances beyond it are `linked:true` and shift when the live one's date changes.
       const compTasks=result.filter(x=>x.recurrence&&x.recurrence.trigger==="completion");
       const seenCompSeries=new Set();
       for(const task of compTasks){
@@ -786,7 +857,7 @@ export default function Focus(){
             const next=generateNextOccurrence(cursor);
             if(!next)break;
             next.recurrence.seriesId=seriesId;
-            next.linked=true; // projected, will shift with its predecessor until locked
+            next.linked=true;
             additions.push(next);
             cursor=next;
           }
@@ -798,7 +869,6 @@ export default function Focus(){
     });
   }
 
-  // Shift all linked (projected) descendants in a completion-chain series when the live instance's date changes
   function shiftLinkedDescendants(changedTask,oldDoDate,oldDueDate){
     if(!changedTask.recurrence||changedTask.recurrence.trigger!=="completion")return;
     const seriesId=changedTask.recurrence.seriesId;
@@ -857,7 +927,6 @@ export default function Focus(){
 
       if(willComplete&&task.recurrence&&task.recurrence.trigger==="completion"){
         const seriesId=task.recurrence.seriesId;
-        // Lock the next linked instance in this series (the immediate successor by date)
         if(seriesId){
           const successors=updated
             .filter(x=>x.recurrence?.seriesId===seriesId&&x.linked&&x.status!=="complete")
@@ -870,7 +939,6 @@ export default function Focus(){
       }
       return updated;
     });
-    // Top up the window for this series after locking (runs as a follow-up state update)
     const task=items.find(x=>x.id===id);
     if(task&&task.status!=="complete"&&task.recurrence&&task.recurrence.trigger==="completion"){
       maintainRecurrenceWindows();
@@ -949,17 +1017,16 @@ export default function Focus(){
         </div>
       </div>
 
-      <div style={{padding:"20px 16px",maxWidth:980,margin:"0 auto",width:"100%",boxSizing:"border-box"}}>
+      <div style={{padding:"20px 16px",maxWidth:1600,margin:"0 auto",width:"100%",boxSizing:"border-box"}}>
         {view==="dashboard"&&(
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(280px, 1fr))",gap:16,alignItems:"start"}}>
             <DashPanel title="Actionable Today" icon="○" items={dashActionable} allItems={items} allContexts={contexts} allStatuses={statuses} onEdit={item=>setForm({item})} onToggleStatus={toggleStatus} onUpdate={updateTask} onJumpTo={jumpTo} emptyMsg="Nothing actionable today"/>
             <DashPanel title="Not Actionable Today" icon="◌" items={dashNotActionable} allItems={items} allContexts={contexts} allStatuses={statuses} onEdit={item=>setForm({item})} onToggleStatus={toggleStatus} onUpdate={updateTask} onJumpTo={jumpTo} emptyMsg="Nothing else today"/>
-            <MilestonePanel items={items} allContexts={contexts} onEdit={item=>setForm({item})} onEditDoDate={item=>setDoDateModal(item)}/>
+            <MilestonePanel items={items} allContexts={contexts} allStatuses={statuses} onEdit={item=>setForm({item})} onEditDoDate={item=>setDoDateModal(item)} onUpdate={updateTask} />
           </div>
         )}
         {view==="inbox"&&(
           <div style={{display:"flex",flexDirection:"column",gap:16}}>
-            {/* Quick capture */}
             <div style={{background:C.white,border:`1px solid ${C.line}`,borderRadius:12,padding:"16px 20px",display:"flex",gap:12,alignItems:"center"}}>
               <span style={{fontSize:16,color:C.muted}}>+</span>
               <input
@@ -972,7 +1039,6 @@ export default function Focus(){
               />
             </div>
 
-            {/* Inbox list */}
             {inboxItems.length===0?(
               <div style={{textAlign:"center",padding:"48px 0",color:C.muted}}>
                 <div style={{...serifI,fontSize:22,marginBottom:8}}>Inbox is empty.</div>
@@ -982,7 +1048,9 @@ export default function Focus(){
               <div style={{display:"flex",flexDirection:"column",gap:6}}>
                 {inboxItems.map(item=>(
                   <div key={item.id} style={{background:C.white,border:`1px solid ${C.line}`,borderRadius:10,padding:"10px 14px",display:"flex",alignItems:"center",gap:12}}>
-                    <div style={{...serif,fontSize:14,color:C.ink,flex:1}}>{item.title}</div>
+                    <div style={{flex:1}}>
+                      <EditableText text={item.title} onSave={t=>updateTask(item.id,{title:t})} style={{...serif,fontSize:14,color:C.ink}} />
+                    </div>
                     <button
                       onClick={()=>setForm({item})}
                       style={{...sans,fontSize:11,color:C.accent,background:`${C.accent}15`,border:`1px solid ${C.accent}40`,borderRadius:6,padding:"4px 10px",cursor:"pointer",fontWeight:500,whiteSpace:"nowrap"}}>
@@ -1001,8 +1069,8 @@ export default function Focus(){
         )}
 
         {view==="plan"&&(
-          <div style={{display:"flex",flexDirection:"column",gap:6}}>
-            {roots.map(item=><TreeItem key={item.id} item={item} items={items} allContexts={contexts} depth={0} onEdit={item=>setForm({item})} onAdd={pid=>setForm({item:{type:"task",parentId:pid,subtasks:[],contexts:[]}})} onDelete={deleteItem} onToggleSubtask={toggleSubtask} expanded={expanded} onToggleExpand={toggleExpand} onEditDoDate={item=>setDoDateModal(item)}/>)}
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            {roots.map(item=><TreeItem key={item.id} item={item} items={items} allContexts={contexts} allStatuses={statuses} depth={0} onEdit={item=>setForm({item})} onAdd={pid=>setForm({item:{type:"task",parentId:pid,subtasks:[],contexts:[]}})} onDelete={deleteItem} onToggleSubtask={toggleSubtask} expanded={expanded} onToggleExpand={toggleExpand} onEditDoDate={item=>setDoDateModal(item)} onUpdate={updateTask} onJumpTo={jumpTo}/>)}
             {roots.length===0&&<div style={{textAlign:"center",padding:"48px 0",color:C.muted}}><div style={{...serifI,fontSize:22,marginBottom:8}}>Nothing here yet.</div></div>}
             <button onClick={()=>setForm({item:{type:"project",subtasks:[],contexts:[]}})} style={{width:"100%",padding:"10px 0",background:"transparent",border:`1px dashed ${C.line2}`,borderRadius:10,fontSize:13,color:C.muted,cursor:"pointer",...sans,marginTop:4}}>+ New project</button>
           </div>
@@ -1022,7 +1090,7 @@ export default function Focus(){
       </div>
 
       {settingsOpen&&<SettingsModal contexts={contexts} statuses={statuses} onUpdateContext={updateContext} onDeleteContext={deleteContext} onAddContext={addContext2} onUpdateStatus={updateStatus} onDeleteStatus={deleteStatus} onAddStatus={addStatus} onClose={()=>setSettingsOpen(false)}/>}
-      {projectPopup&&<ProjectPopup projectId={projectPopup} items={items} allContexts={contexts} onClose={()=>setProjectPopup(null)} onEdit={item=>{setForm({item});setProjectPopup(null);}} onAdd={pid=>setForm({item:{type:"task",parentId:pid,subtasks:[],contexts:[]}})} onDelete={deleteItem} onToggleSubtask={toggleSubtask} onEditDoDate={item=>setDoDateModal(item)} expanded={expanded} onToggleExpand={toggleExpand}/>}
+      {projectPopup&&<ProjectPopup projectId={projectPopup} items={items} allContexts={contexts} allStatuses={statuses} onClose={()=>setProjectPopup(null)} onEdit={item=>{setForm({item});setProjectPopup(null);}} onAdd={pid=>setForm({item:{type:"task",parentId:pid,subtasks:[],contexts:[]}})} onDelete={deleteItem} onToggleSubtask={toggleSubtask} onEditDoDate={item=>setDoDateModal(item)} expanded={expanded} onToggleExpand={toggleExpand} onUpdate={updateTask} onJumpTo={jumpTo}/>}
       {doDateModal&&<DoDateModal item={doDateModal} onSave={date=>saveDoDate(doDateModal,date)} onClose={()=>setDoDateModal(null)}/>}
       {form&&<ItemForm item={form.item} items={items} allContexts={contexts} allStatuses={statuses} onSave={saveItem} onClose={()=>setForm(null)} onAddContext={addContext}/>}
     </div>
