@@ -145,7 +145,8 @@ export default function DayWheel({userId,onSignOut}){
   const[renameVal,setRenameVal]=useState("");
   const[catModal,setCatModal]=useState(false);
   const[showList,setShowList]=useState(false);
-  const[focusMode,setFocusMode]=useState(false);
+  const[showTemplatePanel,setShowTemplatePanel]=useState(false);
+  const[showRightPanel,setShowRightPanel]=useState(false);
   const[rightPanelWidth,setRightPanelWidth]=useState(310);
   const[showFocusTasks,setShowFocusTasks]=useState(false);
   const[saveMsg,setSaveMsg]=useState(null);
@@ -400,22 +401,29 @@ export default function DayWheel({userId,onSignOut}){
     <>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link href="https://fonts.googleapis.com/css2?family=Sacramento&family=Montserrat:wght@900&display=swap" rel="stylesheet" />
-    <div style={{ minHeight:"100vh", background:`radial-gradient(ellipse at 20% -10%,#faf7f0 0%,transparent 55%),radial-gradient(ellipse at 90% 110%,#f0ebe0 0%,transparent 50%),${C.bg}`, color:C.ink, fontFamily:"Inter,system-ui,sans-serif", WebkitFontSmoothing:"antialiased" }}>
+    <div style={{ minHeight:"100vh", background:`radial-gradient(ellipse at 20% -10%,#faf7f0 0%,transparent 55%),radial-gradient(ellipse at 90% 110%,#f0ebe0 0%,transparent 50%),${C.bg}`, color:C.ink, fontFamily:"Inter,system-ui,sans-serif", WebkitFontSmoothing:"antialiased", maxWidth:1360, margin:"0 auto" }}>
       <style>{`
   html,body{margin:0;padding:0;background:#f5f1ea;}
   #root{min-height:100vh;background:#f5f1ea;}
   @media(max-width:1100px){ .dw-main-grid{grid-template-columns:minmax(210px,250px) minmax(0,1fr) !important;} .dw-right-panel{grid-column:1/-1;} }
   @media(max-width:750px){ .dw-main-grid{grid-template-columns:1fr !important;padding:16px 16px 80px !important;} .dw-right-panel{grid-column:1;} }
 `}</style>
-      <div style={{ padding:"24px 28px 64px", display:"grid", gridTemplateColumns:`minmax(210px,250px) minmax(0,2fr) minmax(300px,1fr)`, gap:20, alignItems:"start", }} className="dw-main-grid">
+      <div style={{ padding:"20px 22px 56px", display:"grid", gridTemplateColumns:showRightPanel?`minmax(210px,230px) 760px 300px`: `minmax(210px,230px) 760px`, gap:16, alignItems:"start", justifyContent:"center", margin:"0 auto" }} className="dw-main-grid">
 
-        {!focusMode && <aside style={{display:"flex",flexDirection:"column",gap:14}}>
+        <aside style={{display:"flex",flexDirection:"column",gap:14}}>
           <header>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>
               <div style={{...serifI,fontSize:34,lineHeight:1,color:C.ink}}>Day Wheel</div>
-              <button onClick={onSignOut} style={{background:"transparent",border:`1px solid ${C.line2}`,color:C.muted,padding:"3px 9px",borderRadius:6,fontSize:11,cursor:"pointer",fontFamily:"Inter"}}>Sign out</button>
             </div>
             <div style={{marginTop:4,fontSize:11.5,color:C.muted,letterSpacing:.3}}>A 24-hour map of how the day moves.</div>
+            <div style={{display:"flex",gap:8,marginTop:10,flexWrap:"wrap"}}>
+              <button onClick={()=>setShowTemplatePanel(v=>!v)} style={{background:showTemplatePanel?C.ink:"transparent",color:showTemplatePanel?C.white:C.ink2,border:`1px solid ${showTemplatePanel?C.ink:C.line2}`,padding:"5px 10px",borderRadius:999,fontSize:11,cursor:"pointer",fontFamily:"Inter"}}>
+                {showTemplatePanel?"Hide template":"Show template"}
+              </button>
+              <button onClick={()=>setShowRightPanel(v=>!v)} style={{background:showRightPanel?C.ink:"transparent",color:showRightPanel?C.white:C.ink2,border:`1px solid ${showRightPanel?C.ink:C.line2}`,padding:"5px 10px",borderRadius:999,fontSize:11,cursor:"pointer",fontFamily:"Inter"}}>
+                {showRightPanel?"Hide details":"Show details"}
+              </button>
+            </div>
           </header>
           <NowCard now={now} liveHour={liveHour} current={current} ranged={ranged} setSelectedId={setSelectedId} cats={cats}/>
           {(()=>{
@@ -431,7 +439,7 @@ export default function DayWheel({userId,onSignOut}){
               {hasAdv&&<button onClick={()=>setTomorrowIds({})} style={{flex:1,padding:"8px 0",background:"transparent",border:`1px solid ${C.line2}`,borderRadius:8,fontSize:12,color:C.muted,cursor:"pointer",fontFamily:"Inter"}}>Return All To Today</button>}
             </div>);
           })()}
-          <div style={{background:C.white,border:`1px solid ${C.line}`,borderRadius:12,padding:14}}>
+          {showTemplatePanel&&<div style={{background:C.white,border:`1px solid ${C.line}`,borderRadius:12,padding:14}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
               <div style={{...mono,fontSize:10.5,color:C.muted,textTransform:"uppercase",letterSpacing:1.2}}>Template</div>
               {isOverride&&<button onClick={()=>setActive(auto)} style={{background:"transparent",border:"none",fontSize:10.5,color:C.muted,cursor:"pointer",padding:0,fontFamily:"Inter"}}>auto</button>}
@@ -454,15 +462,14 @@ export default function DayWheel({userId,onSignOut}){
                 {[{key:"breakfast",label:"Breakfast"},{key:"lunch",label:"Lunch"},{key:"dinner",label:"Dinner"}].map(m=>(<div key={m.key} style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}><div style={{fontSize:12,color:C.ink2}}>{m.label}</div><button onClick={()=>setMeal(m.key,!meals[m.key])} style={{width:36,height:20,borderRadius:999,border:"none",cursor:"pointer",padding:0,flexShrink:0,background:meals[m.key]?C.ink:C.line2,position:"relative",transition:"background 200ms"}}><span style={{position:"absolute",top:2,width:16,height:16,borderRadius:999,background:C.white,transition:"left 200ms",left:meals[m.key]?18:2}}/></button></div>))}
               </div>
             </div>
-          </div>
-        </aside>}
+          </div>}
+        </aside>
 
-        <main style={{display:"grid",placeItems:"center",minHeight:focusMode?"100vh":"min(800px,88vh)",position:"relative"}}>
-          <button onClick={()=>setFocusMode(v=>!v)} style={{position:"absolute",top:12,right:12,background:"rgba(255,255,255,0.8)",border:`1px solid ${C.line}`,borderRadius:999,padding:"5px 12px",fontSize:11,fontFamily:"Inter",cursor:"pointer",color:C.ink2,zIndex:10}}>{focusMode?"Exit focus":"Focus mode"}</button>
-          <Wheel ranged={ranged} selectedId={selectedId} setSelectedId={setSelectedId} hoveredId={hoveredId} setHoveredId={setHoveredId} liveHour={liveHour} current={current} cats={cats} onAddAt={addAt} onChangeStart={changeStart} wakeRoutineSubs={wakeRoutineSubs} bedRoutineSubs={bedRoutineSubs} checklist={checklist} tomorrowIds={tomorrowIds} onShowFocusTasks={()=>setShowFocusTasks(true)} focusMode={focusMode}/>
+        <main style={{display:"grid",justifyItems:"start",alignItems:"start",minHeight:"min(800px,88vh)",position:"relative"}}>
+          <Wheel ranged={ranged} selectedId={selectedId} setSelectedId={setSelectedId} hoveredId={hoveredId} setHoveredId={setHoveredId} liveHour={liveHour} current={current} cats={cats} onAddAt={addAt} onChangeStart={changeStart} wakeRoutineSubs={wakeRoutineSubs} bedRoutineSubs={bedRoutineSubs} checklist={checklist} tomorrowIds={tomorrowIds} onShowFocusTasks={()=>setShowFocusTasks(true)} />
         </main>
 
-        {!focusMode && <aside className="dw-right-panel" style={{display:"flex",flexDirection:"column",gap:14,position:"relative"}}>
+        {showRightPanel&&<aside className="dw-right-panel" style={{display:"flex",flexDirection:"column",gap:14,position:"relative"}}>
           <div style={{position:"absolute",left:-6,top:0,bottom:0,width:12,cursor:"col-resize",zIndex:10,display:"flex",alignItems:"center",justifyContent:"center"}} onMouseDown={e=>{e.preventDefault();const sx=e.clientX,sw=rightPanelWidth;function onMove(me){const d=sx-me.clientX;setRightPanelWidth(Math.max(260,Math.min(700,sw+d)));}function onUp(){window.removeEventListener("mousemove",onMove);window.removeEventListener("mouseup",onUp);}window.addEventListener("mousemove",onMove);window.addEventListener("mouseup",onUp);}}><div style={{width:3,height:32,borderRadius:999,background:C.line2,opacity:.6}}/></div>
           {(()=>{const br=bigRockId?focusTasks.find(t=>t.id===bigRockId):null;if(!br)return null;return(<div style={{background:"linear-gradient(135deg,#fdf8ee 0%,#faf3e0 100%)",border:"2px solid #c9a84c",borderRadius:12,padding:"12px 14px"}}><div style={{display:"flex",alignItems:"center",gap:6,marginBottom:7}}><span style={{fontSize:15}}>Rock</span><div style={{...mono,fontSize:9,color:"#8a6a1a",textTransform:"uppercase",letterSpacing:1.4,fontWeight:700}}>The Big Rock</div><button onClick={()=>setShowFocusTasks(true)} style={{marginLeft:"auto",background:"transparent",border:"none",fontSize:10,color:"#8a6a1a",cursor:"pointer",fontFamily:"Inter"}}>open</button></div><div style={{display:"flex",alignItems:"flex-start",gap:8}}><button onClick={()=>setFocusTasks(prev=>prev.map(t=>t.id===br.id?{...t,done:!t.done}:t))} style={{width:18,height:18,borderRadius:4,border:`2px solid ${br.done?"#5a8a4a":"#c9a84c"}`,background:br.done?"#5a8a4a":"transparent",flexShrink:0,cursor:"pointer",padding:0,display:"flex",alignItems:"center",justifyContent:"center",marginTop:2}}>{br.done&&<span style={{color:"#fff",fontSize:10}}>v</span>}</button><div style={{...serif,fontSize:15,color:br.done?"#a09070":"#2a1f00",textDecoration:br.done?"line-through":"none",lineHeight:1.35,flex:1}}>{br.label}</div></div></div>);})()}
           <div style={{display:"flex",gap:6,justifyContent:"flex-end"}}>
