@@ -299,8 +299,16 @@ function compareNullableDate(a,b){
   if(av>bv) return 1;
   return 0;
 }
-function sortItemsByMode(items,mode){
+function sortItemsByMode(items,mode,treeItems){
   if(!mode) return items;
+  const scope=treeItems||items;
+
+  function getSortDate(item){
+    if(mode!=="doDate") return item.doDate;
+    if(item.type==="project") return item.doDate||rollupDoDate(scope,item.id);
+    return item.doDate;
+  }
+
   const sorted=[...items];
   sorted.sort((a,b)=>{
     let result=0;
@@ -311,7 +319,7 @@ function sortItemsByMode(items,mode){
       const bp=PRIORITY_ORDER[b.priority]??99;
       result=ap-bp;
     }
-    else if(mode==="doDate") result=compareNullableDate(a.doDate,b.doDate);
+    else if(mode==="doDate") result=compareNullableDate(getSortDate(a),getSortDate(b));
     else if(mode==="dueDate") result=compareNullableDate(a.dueDate,b.dueDate);
     if(result!==0) return result;
     return (a.title||"").localeCompare(b.title||"");
@@ -720,7 +728,7 @@ function TreeItem({item,items,allContexts,allStatuses,depth,onEdit,onAdd,onDelet
         </div>
         {isExpanded&&children.length>0&&(
           <div style={{marginTop:6,marginLeft:depth*18+18,display:"flex",flexDirection:"column",gap:6}}>
-            {sortItemsByMode(children,sortMode).map(child=><TreeItem key={child.id} item={child} items={items} allContexts={allContexts} allStatuses={allStatuses} depth={depth+1} onEdit={onEdit} onAdd={onAdd} onDelete={onDelete} onToggleSubtask={onToggleSubtask} expanded={expanded} onToggleExpand={onToggleExpand} onEditDoDate={onEditDoDate} onUpdate={onUpdate} onJumpTo={onJumpTo} onOpenProject={onOpenProject} sortMode={sortMode}/>) }
+            {sortItemsByMode(children,sortMode,items).map(child=><TreeItem key={child.id} item={child} items={items} allContexts={allContexts} allStatuses={allStatuses} depth={depth+1} onEdit={onEdit} onAdd={onAdd} onDelete={onDelete} onToggleSubtask={onToggleSubtask} expanded={expanded} onToggleExpand={onToggleExpand} onEditDoDate={onEditDoDate} onUpdate={onUpdate} onJumpTo={onJumpTo} onOpenProject={onOpenProject} sortMode={sortMode}/>) }
             <button onClick={()=>onAdd(item.id)} style={{display:"block",width:"100%",padding:"6px 0",background:"transparent",border:`1px dashed ${C.line2}`,borderRadius:6,fontSize:12,color:C.muted,cursor:"pointer",...sans,textAlign:"center"}}>+ Add inside {item.title}</button>
           </div>
         )}
@@ -743,7 +751,7 @@ function TreeItem({item,items,allContexts,allStatuses,depth,onEdit,onAdd,onDelet
       </div>
       {isExpanded&&children.length>0&&(
         <div style={{marginTop:6,marginLeft:18,display:"flex",flexDirection:"column",gap:6}}>
-          {sortItemsByMode(children,sortMode).map(child=><TreeItem key={child.id} item={child} items={items} allContexts={allContexts} allStatuses={allStatuses} depth={depth+1} onEdit={onEdit} onAdd={onAdd} onDelete={onDelete} onToggleSubtask={onToggleSubtask} expanded={expanded} onToggleExpand={onToggleExpand} onEditDoDate={onEditDoDate} onUpdate={onUpdate} onJumpTo={onJumpTo} onOpenProject={onOpenProject} sortMode={sortMode}/>) }
+          {sortItemsByMode(children,sortMode,items).map(child=><TreeItem key={child.id} item={child} items={items} allContexts={allContexts} allStatuses={allStatuses} depth={depth+1} onEdit={onEdit} onAdd={onAdd} onDelete={onDelete} onToggleSubtask={onToggleSubtask} expanded={expanded} onToggleExpand={onToggleExpand} onEditDoDate={onEditDoDate} onUpdate={onUpdate} onJumpTo={onJumpTo} onOpenProject={onOpenProject} sortMode={sortMode}/>) }
         </div>
       )}
     </div>
@@ -1202,10 +1210,10 @@ export default function Focus({userId}){
   const planItemById=new Map(planItems.map(item=>[item.id,item]));
   const standaloneTaskItems=planItems.filter(item=>item.type==="task"&&!isInProjectHierarchy(item,planItemById));
   const filteredPlanItems=filterTreeByStatuses(planItems,planStatusFilter);
-  const projectRoots=sortItemsByMode(filteredPlanItems.filter(item=>item.type==="project"&&!item.parentId),planProjectSort);
+  const projectRoots=sortItemsByMode(filteredPlanItems.filter(item=>item.type==="project"&&!item.parentId),planProjectSort,filteredPlanItems);
   const filteredStandaloneTaskItems=filterTreeByStatuses(standaloneTaskItems,planStatusFilter);
   const filteredStandaloneTaskItemIds=new Set(filteredStandaloneTaskItems.map(item=>item.id));
-  const standaloneTaskRoots=sortItemsByMode(filteredStandaloneTaskItems.filter(item=>!item.parentId||!filteredStandaloneTaskItemIds.has(item.parentId)),planTaskSort);
+  const standaloneTaskRoots=sortItemsByMode(filteredStandaloneTaskItems.filter(item=>!item.parentId||!filteredStandaloneTaskItemIds.has(item.parentId)),planTaskSort,filteredStandaloneTaskItems);
   const visiblePlanProjectIds=filteredPlanItems.filter(item=>item.type==="project").map(item=>item.id);
   const allPlanProjectsExpanded=visiblePlanProjectIds.length>0&&visiblePlanProjectIds.every(id=>expanded.has(id));
   const planProjectCount=projectRoots.length;
