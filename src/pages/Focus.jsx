@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "../supabase";
 
 const C = { bg:"#f5f1ea", bg2:"#ebe5d9", white:"#fbf9f4", ink:"#181614", ink2:"#4a443c", muted:"#8b8378", line:"#d9d2c2", line2:"#c4bba8", accent:"#c9a84c", green:"#5a8a4a", red:"#a04040" };
@@ -6,13 +6,27 @@ const serif  = { fontFamily:"'Georgia','Times New Roman',serif" };
 const serifI = { fontFamily:"'Georgia','Times New Roman',serif", fontStyle:"italic" };
 const mono   = { fontFamily:"'JetBrains Mono',ui-monospace,monospace" };
 const sans   = { fontFamily:"Inter,system-ui,sans-serif" };
+const INLINE_EDIT_OPEN_SUPPRESS_MS = 250;
+let lastInlineEditBlurAt = 0;
+
+function nowMs(){
+  return typeof performance !== "undefined" ? performance.now() : Date.now();
+}
+
+function markInlineEditBlur(){
+  lastInlineEditBlurAt = nowMs();
+}
+
+function shouldSuppressOpenAfterInlineEditBlur(){
+  return nowMs() - lastInlineEditBlurAt <= INLINE_EDIT_OPEN_SUPPRESS_MS;
+}
 
 function EditableText({text,onSave,style,children,onClick}){
   const [editing,setEditing]=useState(false);
   const [val,setVal]=useState(text||"");
   useEffect(()=>setVal(text||""),[text]);
   return editing?(
-    <input autoFocus value={val} onChange={e=>setVal(e.target.value)} onBlur={()=>{setEditing(false);const t=(val||"").trim();if(t!==text&&t.length>0)onSave&&onSave(t);}} onKeyDown={e=>{if(e.key==="Enter"){e.currentTarget.blur();} if(e.key==="Escape"){setVal(text||"");setEditing(false);}}} style={{fontSize:14,padding:"4px 6px",borderRadius:6,border:`1px solid ${C.line}`,...style}} />
+    <input data-inline-edit="1" autoFocus value={val} onChange={e=>setVal(e.target.value)} onBlur={()=>{markInlineEditBlur();setEditing(false);const t=(val||"").trim();if(t!==text&&t.length>0)onSave&&onSave(t);}} onKeyDown={e=>{if(e.key==="Enter"){e.currentTarget.blur();} if(e.key==="Escape"){setVal(text||"");markInlineEditBlur();setEditing(false);}}} style={{fontSize:14,padding:"4px 6px",borderRadius:6,border:`1px solid ${C.line}`,...style}} />
   ):(
     <span onClick={(e)=>{if(onClick){e.stopPropagation();onClick();}else{setEditing(true);}}} style={{...style, cursor:onClick?"pointer":"text"}}>
       {children}
@@ -25,6 +39,14 @@ function shouldHandleCardOpenClick(event){
   if(!(event.target instanceof Element)) return true;
   // Ignore clicks from controls inside a card so users can edit fields without opening the item.
   return !event.target.closest("button,input,textarea,select,option,label,a,[data-pop],[data-no-open], [contenteditable='true']");
+}
+
+function shouldSuppressCardOpenFromInlineEdit(event){
+  const active=document.activeElement;
+  if(!(active instanceof HTMLElement)) return false;
+  if(active.dataset.inlineEdit!=="1") return false;
+  if(!(event.target instanceof Node)) return false;
+  return active!==event.target && !active.contains(event.target);
 }
 
 const STATUSES = [
@@ -435,7 +457,20 @@ function TaskCardBody({item,allContexts,allStatuses,onEdit,onUpdate,onJumpTo,par
   const ctxTags=allContexts.filter(c=>item.contexts?.includes(c.key));
   const isDone=item.status==="complete";
   const[openPop,setOpenPop]=useState(null);
+  const cardRef=useRef(null);
+  const suppressRowOpenRef=useRef(false);
   function toggle(pop){setOpenPop(p=>p===pop?null:pop);}
+
+  useEffect(()=>{
+    if(!openPop)return;
+    function onDocPointerDown(e){
+      if(!(e.target instanceof Element))return;
+      if(cardRef.current&&cardRef.current.contains(e.target))return;
+      setOpenPop(null);
+    }
+    document.addEventListener("mousedown",onDocPointerDown);
+    return()=>document.removeEventListener("mousedown",onDocPointerDown);
+  },[openPop]);
 
   function Popup({children}){
     return <div style={{position:"absolute",top:24,left:0,zIndex:50,background:C.white,border:`1px solid ${C.line}`,borderRadius:8,boxShadow:"0 4px 16px rgba(0,0,0,.12)",minWidth:140,overflow:"hidden"}}>{children}</div>;
@@ -452,8 +487,42 @@ function TaskCardBody({item,allContexts,allStatuses,onEdit,onUpdate,onJumpTo,par
     }
   }
 
+  function isClickOutsideCardPopup(target){
+    return !(target instanceof Element && target.closest("[data-pop]"));
+  }
+
+  function shouldCloseInlineEditOnly(eventTarget){
+    const active=document.activeElement;
+    if(!(active instanceof HTMLElement)) return false;
+    if(active.dataset.inlineEdit!=="1") return false;
+    if(!cardRef.current?.contains(active)) return false;
+    if(!(eventTarget instanceof Node)) return false;
+    return active!==eventTarget && !active.contains(eventTarget);
+  }
+
   return(
-    <div style={{flex:1,minWidth:0}} onClick={e=>{if(!e.target.closest("[data-pop]"))setOpenPop(null);}}>
+    <div
+      ref={cardRef}
+      style={{flex:1,minWidth:0}}
+      onMouseDownCapture={e=>{
+        const clickedOutsidePopup=isClickOutsideCardPopup(e.target);
+        if(openPop&&clickedOutsidePopup){
+          setOpenPop(null);
+          suppressRowOpenRef.current=true;
+          return;
+        }
+        if(shouldCloseInlineEditOnly(e.target)){
+          suppressRowOpenRef.current=true;
+        }
+      }}
+      onClickCapture={e=>{
+        if(!suppressRowOpenRef.current) return;
+        suppressRowOpenRef.current=false;
+        e.stopPropagation();
+      }}
+      onClick={e=>{
+        if(isClickOutsideCardPopup(e.target)) setOpenPop(null);
+      }}>
       {/* Row 1: priority pill + title */}
       <div style={{display:"flex",alignItems:"baseline",gap:6}}>
         <div style={{position:"relative",flexShrink:0}} data-pop="1">
@@ -505,8 +574,9 @@ function ActionRow({item,items,allContexts,allStatuses,onEdit,onToggleStatus,onU
   const parent=items.find(x=>x.id===item.parentId);
   const grandparent=parent?items.find(x=>x.id===parent.parentId):null;
   const isDone=item.status==="complete";
+  const suppressOpenRef=useRef(false);
   return(
-    <div onClick={e=>{if(!shouldHandleCardOpenClick(e))return;onEdit&&onEdit(item);}} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 12px",background:item.linked?C.bg:C.white,border:`1px ${item.linked?"dashed":"solid"} ${C.line}`,borderRadius:10,opacity:isDone?0.6:item.linked?0.75:1,position:"relative",cursor:"pointer"}}>
+    <div onMouseDownCapture={e=>{suppressOpenRef.current=shouldSuppressCardOpenFromInlineEdit(e);}} onClick={e=>{if(suppressOpenRef.current||shouldSuppressOpenAfterInlineEditBlur()){suppressOpenRef.current=false;return;}if(!shouldHandleCardOpenClick(e))return;onEdit&&onEdit(item);}} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 12px",background:item.linked?C.bg:C.white,border:`1px ${item.linked?"dashed":"solid"} ${C.line}`,borderRadius:10,opacity:isDone?0.6:item.linked?0.75:1,position:"relative",cursor:"pointer"}}>
       <button onClick={(e)=>{e.stopPropagation();onToggleStatus(item.id);}} style={{width:18,height:18,borderRadius:4,flexShrink:0,marginTop:3,cursor:"pointer",padding:0,border:`2px solid ${isDone?C.green:C.line2}`,background:isDone?C.green:"transparent",display:"flex",alignItems:"center",justifyContent:"center"}}>{isDone&&<span style={{color:"#fff",fontSize:10}}>✓</span>}</button>
       <TaskCardBody item={item} allContexts={allContexts} allStatuses={allStatuses} onEdit={onEdit} onUpdate={onUpdate} onJumpTo={onJumpTo} parent={parent} grandparent={grandparent} onToggleSubtask={onToggleSubtask}/>
     </div>
@@ -521,11 +591,12 @@ function TreeItem({item,items,allContexts,allStatuses,depth,onEdit,onAdd,onDelet
   const isDone=item.status==="complete";
   const pct=isProject?progressOf(items,item.id):null;
   const rolledDo=isProject?rollupDoDate(items,item.id):null;
+  const suppressOpenRef=useRef(false);
 
   if(isProject){
     return(
       <div>
-        <div onClick={e=>{if(!shouldHandleCardOpenClick(e))return;item.type==="project"?onOpenProject?.(item):onEdit?.(item);}} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 12px",background:C.white,border:`1px solid ${C.line}`,borderRadius:10,marginLeft:depth*18,cursor:"pointer"}}>
+        <div onMouseDownCapture={e=>{suppressOpenRef.current=shouldSuppressCardOpenFromInlineEdit(e);}} onClick={e=>{if(suppressOpenRef.current||shouldSuppressOpenAfterInlineEditBlur()){suppressOpenRef.current=false;return;}if(!shouldHandleCardOpenClick(e))return;item.type==="project"?onOpenProject?.(item):onEdit?.(item);}} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 12px",background:C.white,border:`1px solid ${C.line}`,borderRadius:10,marginLeft:depth*18,cursor:"pointer"}}>
           <button onClick={(e)=>{e.stopPropagation();children.length&&onToggleExpand(item.id);}} style={{width:18,height:18,flexShrink:0,marginTop:3,fontSize:12,color:C.muted,background:"transparent",border:"none",cursor:children.length?"pointer":"default",padding:0,display:"flex",alignItems:"center",justifyContent:"center"}}>{children.length?(isExpanded?"▾":"▸"):"◈"}</button>
           <div style={{flex:1,minWidth:0}}>
             {/* Row 1: title (no priority pill for projects) */}
@@ -573,7 +644,7 @@ function TreeItem({item,items,allContexts,allStatuses,depth,onEdit,onAdd,onDelet
   const grandparent=parent?items.find(x=>x.id===parent.parentId):null;
   return(
     <div style={{marginLeft:depth*18}}>
-      <div onClick={e=>{if(!shouldHandleCardOpenClick(e))return;onEdit&&onEdit(item);}} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 12px",background:item.linked?C.bg:C.white,border:`1px ${item.linked?"dashed":"solid"} ${C.line}`,borderRadius:10,opacity:isDone?0.6:item.linked?0.75:1,position:"relative",cursor:"pointer"}}>
+      <div onMouseDownCapture={e=>{suppressOpenRef.current=shouldSuppressCardOpenFromInlineEdit(e);}} onClick={e=>{if(suppressOpenRef.current||shouldSuppressOpenAfterInlineEditBlur()){suppressOpenRef.current=false;return;}if(!shouldHandleCardOpenClick(e))return;onEdit&&onEdit(item);}} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 12px",background:item.linked?C.bg:C.white,border:`1px ${item.linked?"dashed":"solid"} ${C.line}`,borderRadius:10,opacity:isDone?0.6:item.linked?0.75:1,position:"relative",cursor:"pointer"}}>
         <button onClick={(e)=>{e.stopPropagation();onToggleSubtask&&onUpdate&&onUpdate(item.id,{status:isDone?"actionable":"complete"});}} style={{width:18,height:18,borderRadius:4,flexShrink:0,marginTop:3,cursor:"pointer",padding:0,border:`2px solid ${isDone?C.green:C.line2}`,background:isDone?C.green:"transparent",display:"flex",alignItems:"center",justifyContent:"center"}}>{isDone&&<span style={{color:"#fff",fontSize:10}}>✓</span>}</button>
         <TaskCardBody item={item} allContexts={allContexts} allStatuses={allStatuses} onEdit={onEdit} onUpdate={onUpdate} onJumpTo={onJumpTo} parent={parent} grandparent={grandparent} onToggleSubtask={onToggleSubtask}/>
         <div style={{display:"flex",gap:3,flexShrink:0,marginTop:2}}>
@@ -673,6 +744,7 @@ function DashPanel({title,icon,items,allItems,allContexts,allStatuses,onEdit,onT
 
 function MilestonePanel({items,allContexts,allStatuses,onEdit,onEditDoDate,onUpdate,onOpenProject}){
   const projects=items.filter(x=>x.type==="project"&&x.status!=="complete"&&x.status!=="someday");
+  const suppressOpenRef=useRef(false);
   return(
     <div style={{background:C.white,border:`1px solid ${C.line}`,borderRadius:12,display:"flex",flexDirection:"column",minHeight:200,overflow:"hidden"}}>
       <div style={{padding:"14px 16px 12px",borderBottom:`1px solid ${C.line}`,display:"flex",alignItems:"center",gap:8}}>
@@ -685,7 +757,7 @@ function MilestonePanel({items,allContexts,allStatuses,onEdit,onEditDoDate,onUpd
           const pct=progressOf(items,item.id);
           const rolledDo=rollupDoDate(items,item.id);
           return(
-            <div key={item.id} onClick={e=>{if(!shouldHandleCardOpenClick(e))return;onOpenProject?.(item);}} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 12px",background:C.white,border:`1px solid ${C.line}`,borderRadius:10,cursor:"pointer"}}>
+            <div key={item.id} onMouseDownCapture={e=>{suppressOpenRef.current=shouldSuppressCardOpenFromInlineEdit(e);}} onClick={e=>{if(suppressOpenRef.current||shouldSuppressOpenAfterInlineEditBlur()){suppressOpenRef.current=false;return;}if(!shouldHandleCardOpenClick(e))return;onOpenProject?.(item);}} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 12px",background:C.white,border:`1px solid ${C.line}`,borderRadius:10,cursor:"pointer"}}>
               <div style={{width:18,flexShrink:0,marginTop:3,fontSize:12,color:C.muted,textAlign:"center"}}>◈</div>
               <div style={{flex:1,minWidth:0}}>
                 <div style={{display:"flex",alignItems:"baseline",gap:6}}>
