@@ -122,7 +122,7 @@ function LoadingScreen(){
   );
 }
 
-export default function DayWheel({userId,onSignOut,onGoToFocus}){
+export default function DayWheel({userId,onSignOut}){
   const now=useNow();
   const[dataLoading,setDataLoading]=useState(true);
   const[cats,setCats]=useState(DEFAULT_CATS);
@@ -142,7 +142,6 @@ export default function DayWheel({userId,onSignOut,onGoToFocus}){
   const[showTemplatePanel,setShowTemplatePanel]=useState(false);
   const[showRightPanel,setShowRightPanel]=useState(false);
   const[rightPanelWidth,setRightPanelWidth]=useState(310);
-  const[showFocusTasks,setShowFocusTasks]=useState(false);
   const[saveMsg,setSaveMsg]=useState(null);
   const[workingCopy,setWorkingCopy]=useState(null);
 
@@ -471,36 +470,23 @@ export default function DayWheel({userId,onSignOut,onGoToFocus}){
         </aside>
 
         <main style={{display:"grid",justifyItems:"start",alignItems:"start",minHeight:"min(800px,88vh)",position:"relative"}}>
-          <Wheel ranged={ranged} selectedId={selectedId} setSelectedId={setSelectedId} hoveredId={hoveredId} setHoveredId={setHoveredId} liveHour={liveHour} current={current} cats={cats} onAddAt={addAt} onChangeStart={changeStart} wakeRoutineSubs={wakeRoutineSubs} bedRoutineSubs={bedRoutineSubs} checklist={checklist} tomorrowIds={tomorrowIds} onShowFocusTasks={onGoToFocus} />
+          <Wheel ranged={ranged} selectedId={selectedId} setSelectedId={setSelectedId} hoveredId={hoveredId} setHoveredId={setHoveredId} liveHour={liveHour} current={current} cats={cats} onAddAt={addAt} onChangeStart={changeStart} wakeRoutineSubs={wakeRoutineSubs} bedRoutineSubs={bedRoutineSubs} checklist={checklist} tomorrowIds={tomorrowIds} />
         </main>
 
         {showRightPanel&&<aside className="dw-right-panel" style={{display:"flex",flexDirection:"column",gap:14,position:"relative"}}>
           <div style={{position:"absolute",left:-6,top:0,bottom:0,width:12,cursor:"col-resize",zIndex:10,display:"flex",alignItems:"center",justifyContent:"center"}} onMouseDown={e=>{e.preventDefault();const sx=e.clientX,sw=rightPanelWidth;function onMove(me){const d=sx-me.clientX;setRightPanelWidth(Math.max(260,Math.min(700,sw+d)));}function onUp(){window.removeEventListener("mousemove",onMove);window.removeEventListener("mouseup",onUp);}window.addEventListener("mousemove",onMove);window.addEventListener("mouseup",onUp);}}><div style={{width:3,height:32,borderRadius:999,background:C.line2,opacity:.6}}/></div>
-          {(()=>{const br=bigRockId?focusTasks.find(t=>t.id===bigRockId):null;if(!br)return null;return(<div style={{background:"linear-gradient(135deg,#fdf8ee 0%,#faf3e0 100%)",border:"2px solid #c9a84c",borderRadius:12,padding:"12px 14px"}}><div style={{display:"flex",alignItems:"center",gap:6,marginBottom:7}}><span style={{fontSize:15}}>Rock</span><div style={{...mono,fontSize:9,color:"#8a6a1a",textTransform:"uppercase",letterSpacing:1.4,fontWeight:700}}>The Big Rock</div><button onClick={()=>setShowFocusTasks(true)} style={{marginLeft:"auto",background:"transparent",border:"none",fontSize:10,color:"#8a6a1a",cursor:"pointer",fontFamily:"Inter"}}>open</button></div><div style={{display:"flex",alignItems:"flex-start",gap:8}}><button onClick={()=>setFocusTasks(prev=>prev.map(t=>t.id===br.id?{...t,done:!t.done}:t))} style={{width:18,height:18,borderRadius:4,border:`2px solid ${br.done?"#5a8a4a":"#c9a84c"}`,background:br.done?"#5a8a4a":"transparent",flexShrink:0,cursor:"pointer",padding:0,display:"flex",alignItems:"center",justifyContent:"center",marginTop:2}}>{br.done&&<span style={{color:"#fff",fontSize:10}}>v</span>}</button><div style={{...serif,fontSize:15,color:br.done?"#a09070":"#2a1f00",textDecoration:br.done?"line-through":"none",lineHeight:1.35,flex:1}}>{br.label}</div></div></div>);})()}
+          {(()=>{const br=bigRockId?focusTasks.find(t=>t.id===bigRockId):null;if(!br)return null;return(<div style={{background:"linear-gradient(135deg,#fdf8ee 0%,#faf3e0 100%)",border:"2px solid #c9a84c",borderRadius:12,padding:"12px 14px"}}><div style={{display:"flex",alignItems:"center",gap:6,marginBottom:7}}><span style={{fontSize:15}}>Rock</span><div style={{...mono,fontSize:9,color:"#8a6a1a",textTransform:"uppercase",letterSpacing:1.4,fontWeight:700}}>The Big Rock</div></div><div style={{display:"flex",alignItems:"flex-start",gap:8}}><button onClick={()=>setFocusTasks(prev=>prev.map(t=>t.id===br.id?{...t,done:!t.done}:t))} style={{width:18,height:18,borderRadius:4,border:`2px solid ${br.done?"#5a8a4a":"#c9a84c"}`,background:br.done?"#5a8a4a":"transparent",flexShrink:0,cursor:"pointer",padding:0,display:"flex",alignItems:"center",justifyContent:"center",marginTop:2}}>{br.done&&<span style={{color:"#fff",fontSize:10}}>v</span>}</button><div style={{...serif,fontSize:15,color:br.done?"#a09070":"#2a1f00",textDecoration:br.done?"line-through":"none",lineHeight:1.35,flex:1}}>{br.label}</div></div></div>);})()}
           <div style={{display:"flex",gap:6,justifyContent:"flex-end"}}>
-            <button onClick={()=>{setShowList(v=>!v);setShowFocusTasks(false);}} style={{background:showList?C.ink:"transparent",color:showList?C.white:C.ink2,border:`1px solid ${showList?C.ink:C.line2}`,padding:"5px 12px",borderRadius:999,fontSize:11,cursor:"pointer",fontFamily:"Inter"}}>{showList?"Back":"All Activities"}</button>
-            <button onClick={()=>{setShowFocusTasks(v=>!v);setShowList(false);}} style={{background:showFocusTasks?C.ink:"transparent",color:showFocusTasks?C.white:C.ink2,border:`1px solid ${showFocusTasks?C.ink:C.line2}`,padding:"5px 12px",borderRadius:999,fontSize:11,cursor:"pointer",fontFamily:"Inter"}}>{showFocusTasks?"Back":"Focus Tasks"}</button>
+            <button onClick={()=>setShowList(v=>!v)} style={{background:showList?C.ink:"transparent",color:showList?C.white:C.ink2,border:`1px solid ${showList?C.ink:C.line2}`,padding:"5px 12px",borderRadius:999,fontSize:11,cursor:"pointer",fontFamily:"Inter"}}>{showList?"Back":"All Activities"}</button>
           </div>
           {showList?<ActivityList ranged={ranged} cats={cats} setSelectedId={id=>{setSelectedId(id);setShowList(false);}}/>
-          :showFocusTasks?<FocusTaskPanel tasks={focusTasks} setTasks={setFocusTasks} bigRockId={bigRockId} setBigRockId={setBigRockId} onClose={()=>setShowFocusTasks(false)}/>
           :selected?<SliceEditor slice={selected} ranged={ranged} updateField={updateField} changeDur={changeDur} changeStart={changeStart} deleteAct={deleteAct} insertAfter={insertAfter} selectByOffset={selectByOffset} setSelectedId={setSelectedId} canDelete={ranged.filter(x=>!x.isSleep).length>1} cats={cats} wakeRoutineSubs={wakeRoutineSubs} bedRoutineSubs={bedRoutineSubs} onUpdateRoutineSubs={updateRoutineSubs} onUpdateSliceSubs={updateSliceSubs} onPromote={promoteToRoutine} onDemote={demoteToSingle} checklist={checklist} setChecklist={setChecklist} tomorrowIds={tomorrowIds} onAdvance={advanceToTomorrow} onUndoAdvance={undoAdvance} wakeRoutineCopyOptions={Object.values(templates).filter(t=>t.id!==activeTpl.id).map(t=>({id:t.id,name:t.name}))} onCopyWakeRoutine={sourceId=>{const src=templates[sourceId];const subs=src?.wakeRoutineSubs??[];if(!subs.length){alert(`${src?.name??sourceId} has no wake-up steps saved yet.`);return;}updateRoutineSubs("__wake_routine__",subs.map(s=>({...s,id:`sub_${Date.now()}_${Math.random().toString(36).slice(2,5)}`})));}} otherTemplates={Object.values(templates).filter(t=>t.id!==activeTpl.id).map(t=>({id:t.id,name:t.name}))} onCopySliceTo={targetId=>copySliceTo(selected,targetId)}/>
           :<EmptyHint/>}
-          {!showFocusTasks&&<><CategoryStats totals={totals} goals={goals} cats={cats} onEdit={()=>setCatModal(true)}/><div style={{display:"flex",justifyContent:"flex-end",gap:8}}><button onClick={clearAllActivities} style={{background:"transparent",border:`1px solid ${C.line2}`,color:C.muted,padding:"6px 12px",borderRadius:999,fontSize:11,cursor:"pointer",fontFamily:"Inter"}}>Clear all</button>{activeTpl.builtIn&&<button onClick={resetTpl} style={{background:"transparent",border:`1px solid ${C.line2}`,color:C.ink2,padding:"6px 12px",borderRadius:999,fontSize:11,cursor:"pointer",fontFamily:"Inter"}}>Reset to default</button>}</div></>}
+          <><CategoryStats totals={totals} goals={goals} cats={cats} onEdit={()=>setCatModal(true)}/><div style={{display:"flex",justifyContent:"flex-end",gap:8}}><button onClick={clearAllActivities} style={{background:"transparent",border:`1px solid ${C.line2}`,color:C.muted,padding:"6px 12px",borderRadius:999,fontSize:11,cursor:"pointer",fontFamily:"Inter"}}>Clear all</button>{activeTpl.builtIn&&<button onClick={resetTpl} style={{background:"transparent",border:`1px solid ${C.line2}`,color:C.ink2,padding:"6px 12px",borderRadius:999,fontSize:11,cursor:"pointer",fontFamily:"Inter"}}>Reset to default</button>}</div></>
         </aside>}
       </div>
 
       {catModal&&<CatModal cats={cats} templates={templates} goals={goals} onAdd={addCat} onUpdate={updateCat} onDelete={deleteCat} onSetGoal={setGoal} onClose={()=>setCatModal(false)} tplName={activeTpl.name}/>}
-      {showFocusTasks&&(
-        <div style={{position:"fixed",inset:0,zIndex:200,background:`radial-gradient(ellipse at 20% -10%,#faf7f0 0%,transparent 55%),radial-gradient(ellipse at 90% 110%,#f0ebe0 0%,transparent 50%),${C.bg}`,display:"flex",flexDirection:"column",fontFamily:"Inter,system-ui,sans-serif"}}>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"20px 32px 16px",borderBottom:`1px solid ${C.line}`}}>
-            <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:30,fontWeight:900,letterSpacing:"0.06em",textTransform:"uppercase",color:C.ink}}>Focus Tasks</div>
-            <button onClick={()=>setShowFocusTasks(false)} style={{background:"transparent",border:`1px solid ${C.line2}`,color:C.ink2,padding:"7px 18px",borderRadius:999,fontSize:13,cursor:"pointer",fontFamily:"Inter"}}>Close</button>
-          </div>
-          <div style={{flex:1,overflowY:"auto",overflowX:"hidden",padding:"16px 24px",width:"100%",boxSizing:"border-box"}}>
-            <FocusTaskPanel tasks={focusTasks} setTasks={setFocusTasks} bigRockId={bigRockId} setBigRockId={setBigRockId} onClose={()=>setShowFocusTasks(false)} fullScreen/>
-          </div>
-        </div>
-      )}
       {saveMsg&&<div style={{position:"fixed",bottom:60,left:"50%",transform:"translateX(-50%)",background:"#3a6b3a",color:"#fff",padding:"8px 20px",borderRadius:999,fontSize:13,fontFamily:"Inter",zIndex:600}}>{saveMsg}</div>}
       {isDirty&&<UnsavedBar tplName={baseTpl.name} onDiscard={discardChanges} onSaveToday={saveForToday} onSaveTemplate={commitToTemplate} onSaveNew={saveAsNew}/>}
     </div>
@@ -555,7 +541,7 @@ function NowCard({now,liveHour,current,ranged,setSelectedId,cats}){
   );
 }
 
-function Wheel({ranged,selectedId,setSelectedId,hoveredId,setHoveredId,liveHour,current,cats,onAddAt,onChangeStart,wakeRoutineSubs,bedRoutineSubs,checklist,tomorrowIds,onShowFocusTasks,focusMode}){
+function Wheel({ranged,selectedId,setSelectedId,hoveredId,setHoveredId,liveHour,current,cats,onAddAt,onChangeStart,wakeRoutineSubs,bedRoutineSubs,checklist,tomorrowIds,focusMode}){
   const liveAng=h2a(liveHour);
   const wakeTimeRef=ranged.find(s=>s.isSleep)?.endMin??360;
   function isSliceComplete(sl){let subs=null;if(sl.isRoutine){subs=sl.id==="__wake_routine__"?wakeRoutineSubs:bedRoutineSubs;}else if(sl.isUserRoutine){subs=sl.subs;}if(!subs||subs.length===0)return false;return subs.every(s=>!!checklist[`${sl.id}_${s.id}`]);}
@@ -608,7 +594,7 @@ function Wheel({ranged,selectedId,setSelectedId,hoveredId,setHoveredId,liveHour,
           const mid=a0+sweep/2;const off=pol(0,0,pulled,mid);const gap=Math.min(.4,sweep*.08);
           return(
             <g key={sl.id} transform={`translate(${off.x},${off.y})`} style={{transition:"transform 240ms cubic-bezier(.2,.8,.2,1)"}}>
-              <path d={wdgSweep(CX,CY,RO,RI,a0,sweep,gap)} fill={cat.color} fillOpacity={isSel?1:isHov?.96:isCur?.9:.78} stroke={C.bg} strokeWidth={1} data-slice="1" onMouseDown={e=>onSliceMouseDown(e,sl)} onClick={e=>e.stopPropagation()} onDoubleClick={e=>{e.stopPropagation();if(sl.cat==="focus")onShowFocusTasks();}} onMouseEnter={()=>!sl.isSleep&&setHoveredId(sl.id)} onMouseLeave={()=>setHoveredId(null)} style={{cursor:sl.isSleep?"default":sl.isRoutine?"pointer":"grab",transition:"fill-opacity 200ms",userSelect:"none"}}/>
+              <path d={wdgSweep(CX,CY,RO,RI,a0,sweep,gap)} fill={cat.color} fillOpacity={isSel?1:isHov?.96:isCur?.9:.78} stroke={C.bg} strokeWidth={1} data-slice="1" onMouseDown={e=>onSliceMouseDown(e,sl)} onClick={e=>e.stopPropagation()} onMouseEnter={()=>!sl.isSleep&&setHoveredId(sl.id)} onMouseLeave={()=>setHoveredId(null)} style={{cursor:sl.isSleep?"default":sl.isRoutine?"pointer":"grab",transition:"fill-opacity 200ms",userSelect:"none"}}/>
               {isSel&&!sl.isSleep&&<path d={wdgSweep(CX,CY,RO+4,RO+1,a0,sweep,gap)} fill={C.ink}/>}
               {(tomorrowIds??{})[sl.id]&&(<path d={wdgSweep(CX,CY,RO+2,RO-2,a0,sweep,gap)} fill="none" stroke="rgba(255,255,255,0.6)" strokeWidth={1.5} strokeDasharray="3 2"/>)}
               {(sl.isRoutine||sl.isUserRoutine)&&(()=>{

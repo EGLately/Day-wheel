@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
-import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Link, useLocation } from "react-router-dom";
 import { supabase } from "./supabase";
 import DayWheel from "./pages/DayWheel";
 function DayWheelWrapper({ userId, onSignOut }) {
-  const navigate = useNavigate();
-  return <DayWheel userId={userId} onSignOut={onSignOut} onGoToFocus={() => navigate("/focus")} />;
+  return <DayWheel userId={userId} onSignOut={onSignOut} />;
 }
 import Focus from "./pages/Focus";
 
