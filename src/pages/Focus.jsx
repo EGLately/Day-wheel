@@ -21,6 +21,12 @@ function EditableText({text,onSave,style,children,onClick}){
   );
 }
 
+function shouldHandleCardOpenClick(event){
+  if(!(event.target instanceof Element)) return true;
+  // Ignore clicks from controls inside a card so users can edit fields without opening the item.
+  return !event.target.closest("button,input,textarea,select,option,label,a,[data-pop],[data-no-open], [contenteditable='true']");
+}
+
 const STATUSES = [
   { key:"actionable", label:"Actionable", color:"#5a8a4a" },
   { key:"waiting",    label:"Waiting",    color:"#7a6fa0" },
@@ -500,7 +506,7 @@ function ActionRow({item,items,allContexts,allStatuses,onEdit,onToggleStatus,onU
   const grandparent=parent?items.find(x=>x.id===parent.parentId):null;
   const isDone=item.status==="complete";
   return(
-    <div onClick={()=>onEdit&&onEdit(item)} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 12px",background:item.linked?C.bg:C.white,border:`1px ${item.linked?"dashed":"solid"} ${C.line}`,borderRadius:10,opacity:isDone?0.6:item.linked?0.75:1,position:"relative",cursor:"pointer"}}>
+    <div onClick={e=>{if(!shouldHandleCardOpenClick(e))return;onEdit&&onEdit(item);}} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 12px",background:item.linked?C.bg:C.white,border:`1px ${item.linked?"dashed":"solid"} ${C.line}`,borderRadius:10,opacity:isDone?0.6:item.linked?0.75:1,position:"relative",cursor:"pointer"}}>
       <button onClick={(e)=>{e.stopPropagation();onToggleStatus(item.id);}} style={{width:18,height:18,borderRadius:4,flexShrink:0,marginTop:3,cursor:"pointer",padding:0,border:`2px solid ${isDone?C.green:C.line2}`,background:isDone?C.green:"transparent",display:"flex",alignItems:"center",justifyContent:"center"}}>{isDone&&<span style={{color:"#fff",fontSize:10}}>✓</span>}</button>
       <TaskCardBody item={item} allContexts={allContexts} allStatuses={allStatuses} onEdit={onEdit} onUpdate={onUpdate} onJumpTo={onJumpTo} parent={parent} grandparent={grandparent} onToggleSubtask={onToggleSubtask}/>
     </div>
@@ -519,7 +525,7 @@ function TreeItem({item,items,allContexts,allStatuses,depth,onEdit,onAdd,onDelet
   if(isProject){
     return(
       <div>
-        <div onClick={()=>item.type==="project"?onOpenProject?.(item):onEdit?.(item)} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 12px",background:C.white,border:`1px solid ${C.line}`,borderRadius:10,marginLeft:depth*18,cursor:"pointer"}}>
+        <div onClick={e=>{if(!shouldHandleCardOpenClick(e))return;item.type==="project"?onOpenProject?.(item):onEdit?.(item);}} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 12px",background:C.white,border:`1px solid ${C.line}`,borderRadius:10,marginLeft:depth*18,cursor:"pointer"}}>
           <button onClick={(e)=>{e.stopPropagation();children.length&&onToggleExpand(item.id);}} style={{width:18,height:18,flexShrink:0,marginTop:3,fontSize:12,color:C.muted,background:"transparent",border:"none",cursor:children.length?"pointer":"default",padding:0,display:"flex",alignItems:"center",justifyContent:"center"}}>{children.length?(isExpanded?"▾":"▸"):"◈"}</button>
           <div style={{flex:1,minWidth:0}}>
             {/* Row 1: title (no priority pill for projects) */}
@@ -567,7 +573,7 @@ function TreeItem({item,items,allContexts,allStatuses,depth,onEdit,onAdd,onDelet
   const grandparent=parent?items.find(x=>x.id===parent.parentId):null;
   return(
     <div style={{marginLeft:depth*18}}>
-      <div onClick={()=>onEdit&&onEdit(item)} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 12px",background:item.linked?C.bg:C.white,border:`1px ${item.linked?"dashed":"solid"} ${C.line}`,borderRadius:10,opacity:isDone?0.6:item.linked?0.75:1,position:"relative",cursor:"pointer"}}>
+      <div onClick={e=>{if(!shouldHandleCardOpenClick(e))return;onEdit&&onEdit(item);}} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 12px",background:item.linked?C.bg:C.white,border:`1px ${item.linked?"dashed":"solid"} ${C.line}`,borderRadius:10,opacity:isDone?0.6:item.linked?0.75:1,position:"relative",cursor:"pointer"}}>
         <button onClick={(e)=>{e.stopPropagation();onToggleSubtask&&onUpdate&&onUpdate(item.id,{status:isDone?"actionable":"complete"});}} style={{width:18,height:18,borderRadius:4,flexShrink:0,marginTop:3,cursor:"pointer",padding:0,border:`2px solid ${isDone?C.green:C.line2}`,background:isDone?C.green:"transparent",display:"flex",alignItems:"center",justifyContent:"center"}}>{isDone&&<span style={{color:"#fff",fontSize:10}}>✓</span>}</button>
         <TaskCardBody item={item} allContexts={allContexts} allStatuses={allStatuses} onEdit={onEdit} onUpdate={onUpdate} onJumpTo={onJumpTo} parent={parent} grandparent={grandparent} onToggleSubtask={onToggleSubtask}/>
         <div style={{display:"flex",gap:3,flexShrink:0,marginTop:2}}>
@@ -679,7 +685,7 @@ function MilestonePanel({items,allContexts,allStatuses,onEdit,onEditDoDate,onUpd
           const pct=progressOf(items,item.id);
           const rolledDo=rollupDoDate(items,item.id);
           return(
-            <div key={item.id} onClick={()=>onOpenProject?.(item)} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 12px",background:C.white,border:`1px solid ${C.line}`,borderRadius:10,cursor:"pointer"}}>
+            <div key={item.id} onClick={e=>{if(!shouldHandleCardOpenClick(e))return;onOpenProject?.(item);}} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 12px",background:C.white,border:`1px solid ${C.line}`,borderRadius:10,cursor:"pointer"}}>
               <div style={{width:18,flexShrink:0,marginTop:3,fontSize:12,color:C.muted,textAlign:"center"}}>◈</div>
               <div style={{flex:1,minWidth:0}}>
                 <div style={{display:"flex",alignItems:"baseline",gap:6}}>
@@ -1032,8 +1038,17 @@ export default function Focus({userId}){
   if(dataLoading) return <div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"Georgia,serif"}}><div style={{fontStyle:"italic",fontSize:24,color:C.ink}}>Loading Focus…</div></div>;
 
   return(
-    <div style={{minHeight:"100vh",background:C.bg,...sans,color:C.ink}} onClick={e=>{if(quickAdd&&!e.target.closest("[data-quickadd]"))setQuickAdd(false);}}>
+    <div className="focus-page" style={{minHeight:"100vh",background:C.bg,...sans,color:C.ink}} onClick={e=>{if(quickAdd&&!e.target.closest("[data-quickadd]"))setQuickAdd(false);}}>
       <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet"/>
+      <style>{`
+        .focus-page input[type="date"] {
+          color-scheme: light;
+        }
+        .focus-page input[type="date"]::-webkit-calendar-picker-indicator {
+          filter: brightness(0);
+          opacity: 1;
+        }
+      `}</style>
       <div style={{borderBottom:`1px solid ${C.line}`,padding:"16px 20px",background:C.white,display:"grid",gridTemplateColumns:"auto 1fr auto",alignItems:"center",gap:10}}>
         <div><div style={{...serifI,fontSize:32,color:C.ink,lineHeight:1}}>Focus</div><div style={{fontSize:12,color:C.muted,marginTop:3}}>{allActions.filter(x=>x.status!=="complete").length} open · {openToday} do today</div></div>
         <div style={{display:"flex",justifyContent:"center",width:"100%"}}>
