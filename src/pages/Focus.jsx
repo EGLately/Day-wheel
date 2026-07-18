@@ -228,6 +228,65 @@ const SEED = [
 
 function getChildren(items,pid){return items.filter(x=>x.parentId===pid&&!isInboxItem(x));}
 function isInboxItem(item){return item?.type==="task"&&Array.isArray(item.contexts)&&item.contexts.includes(INBOX_CONTEXT_KEY);}
+function isInProjectHierarchy(item,itemsById){
+  let cursor=item;
+  while(cursor?.parentId){
+    const parent=itemsById.get(cursor.parentId);
+    if(!parent) return false;
+    if(parent.type==="project") return true;
+    cursor=parent;
+  }
+  return false;
+}
+function itemMatchesContexts(item,contextKeys){
+  if(contextKeys.length===0) return true;
+  const itemContexts=Array.isArray(item.contexts)?item.contexts:[];
+  return contextKeys.every(key=>itemContexts.includes(key));
+}
+function filterTreeByContexts(items,contextKeys){
+  if(contextKeys.length===0) return items;
+  const itemById=new Map(items.map(item=>[item.id,item]));
+  const includedIds=new Set();
+
+  function includeWithAncestors(id){
+    let cursor=itemById.get(id);
+    while(cursor){
+      if(includedIds.has(cursor.id)) break;
+      includedIds.add(cursor.id);
+      cursor=cursor.parentId?itemById.get(cursor.parentId):null;
+    }
+  }
+
+  items.forEach(item=>{
+    if(itemMatchesContexts(item,contextKeys)) includeWithAncestors(item.id);
+  });
+
+  return items.filter(item=>includedIds.has(item.id));
+}
+function itemMatchesStatuses(item,statusKeys){
+  if(statusKeys.length===0) return true;
+  return statusKeys.includes(item.status);
+}
+function filterTreeByStatuses(items,statusKeys){
+  if(statusKeys.length===0) return items;
+  const itemById=new Map(items.map(item=>[item.id,item]));
+  const includedIds=new Set();
+
+  function includeWithAncestors(id){
+    let cursor=itemById.get(id);
+    while(cursor){
+      if(includedIds.has(cursor.id)) break;
+      includedIds.add(cursor.id);
+      cursor=cursor.parentId?itemById.get(cursor.parentId):null;
+    }
+  }
+
+  items.forEach(item=>{
+    if(itemMatchesStatuses(item,statusKeys)) includeWithAncestors(item.id);
+  });
+
+  return items.filter(item=>includedIds.has(item.id));
+}
 function getDescendants(items,id){const ch=getChildren(items,id);return ch.flatMap(c=>[c,...getDescendants(items,c.id)]);}
 function getActions(items,id){return getDescendants(items,id).filter(x=>x.type==="task");}
 function progressOf(items,id){const a=getActions(items,id);if(!a.length)return null;return Math.round(a.filter(x=>x.status==="complete").length/a.length*100);}
@@ -596,9 +655,10 @@ function TreeItem({item,items,allContexts,allStatuses,depth,onEdit,onAdd,onDelet
   if(isProject){
     return(
       <div>
-        <div onMouseDownCapture={e=>{suppressOpenRef.current=shouldSuppressCardOpenFromInlineEdit(e);}} onClick={e=>{if(suppressOpenRef.current||shouldSuppressOpenAfterInlineEditBlur()){suppressOpenRef.current=false;return;}if(!shouldHandleCardOpenClick(e))return;item.type==="project"?onOpenProject?.(item):onEdit?.(item);}} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 12px",background:C.white,border:`1px solid ${C.line}`,borderRadius:10,marginLeft:depth*18,cursor:"pointer"}}>
+        <div onMouseDownCapture={e=>{suppressOpenRef.current=shouldSuppressCardOpenFromInlineEdit(e);}} onClick={e=>{if(suppressOpenRef.current||shouldSuppressOpenAfterInlineEditBlur()){suppressOpenRef.current=false;return;}if(!shouldHandleCardOpenClick(e))return;item.type==="project"?onOpenProject?.(item):onEdit?.(item);}} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 12px",background:"linear-gradient(135deg,#fdf8ee 0%,#faf3e3 100%)",border:"1px solid #d8c997",borderLeft:"4px solid #c9a84c",borderRadius:10,marginLeft:depth*18,cursor:"pointer",boxShadow:"0 2px 10px rgba(201,168,76,0.12)"}}>
           <button onClick={(e)=>{e.stopPropagation();children.length&&onToggleExpand(item.id);}} style={{width:18,height:18,flexShrink:0,marginTop:3,fontSize:12,color:C.muted,background:"transparent",border:"none",cursor:children.length?"pointer":"default",padding:0,display:"flex",alignItems:"center",justifyContent:"center"}}>{children.length?(isExpanded?"▾":"▸"):"◈"}</button>
           <div style={{flex:1,minWidth:0}}>
+            <div style={{display:"flex",alignItems:"center",gap:6,paddingLeft:18,marginBottom:3}}><span style={{...mono,fontSize:9,color:"#8a6a1a"}}>{children.length} {children.length===1?"item":"items"}</span></div>
             {/* Row 1: title (no priority pill for projects) */}
             <div style={{display:"flex",alignItems:"baseline",gap:6}}>
               <EditableText text={item.title} onSave={t=>onUpdate?onUpdate(item.id,{title:t}):onEdit&&onEdit({...item,title:t})} onClick={()=>onOpenProject?.(item)} style={{...serif,fontSize:14,color:C.ink,flex:1}}>
@@ -644,7 +704,7 @@ function TreeItem({item,items,allContexts,allStatuses,depth,onEdit,onAdd,onDelet
   const grandparent=parent?items.find(x=>x.id===parent.parentId):null;
   return(
     <div style={{marginLeft:depth*18}}>
-      <div onMouseDownCapture={e=>{suppressOpenRef.current=shouldSuppressCardOpenFromInlineEdit(e);}} onClick={e=>{if(suppressOpenRef.current||shouldSuppressOpenAfterInlineEditBlur()){suppressOpenRef.current=false;return;}if(!shouldHandleCardOpenClick(e))return;onEdit&&onEdit(item);}} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 12px",background:item.linked?C.bg:C.white,border:`1px ${item.linked?"dashed":"solid"} ${C.line}`,borderRadius:10,opacity:isDone?0.6:item.linked?0.75:1,position:"relative",cursor:"pointer"}}>
+      <div onMouseDownCapture={e=>{suppressOpenRef.current=shouldSuppressCardOpenFromInlineEdit(e);}} onClick={e=>{if(suppressOpenRef.current||shouldSuppressOpenAfterInlineEditBlur()){suppressOpenRef.current=false;return;}if(!shouldHandleCardOpenClick(e))return;onEdit&&onEdit(item);}} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 12px",background:item.linked?C.bg:C.white,border:`1px ${item.linked?"dashed":"solid"} ${C.line}`,borderLeft:`3px solid ${isDone?"#9abf8f":"#9aaac4"}`,borderRadius:10,opacity:isDone?0.6:item.linked?0.75:1,position:"relative",cursor:"pointer"}}>
         <button onClick={(e)=>{e.stopPropagation();onToggleSubtask&&onUpdate&&onUpdate(item.id,{status:isDone?"actionable":"complete"});}} style={{width:18,height:18,borderRadius:4,flexShrink:0,marginTop:3,cursor:"pointer",padding:0,border:`2px solid ${isDone?C.green:C.line2}`,background:isDone?C.green:"transparent",display:"flex",alignItems:"center",justifyContent:"center"}}>{isDone&&<span style={{color:"#fff",fontSize:10}}>✓</span>}</button>
         <TaskCardBody item={item} allContexts={allContexts} allStatuses={allStatuses} onEdit={onEdit} onUpdate={onUpdate} onJumpTo={onJumpTo} parent={parent} grandparent={grandparent} onToggleSubtask={onToggleSubtask}/>
         <div style={{display:"flex",gap:3,flexShrink:0,marginTop:2}}>
@@ -889,6 +949,7 @@ export default function Focus({userId}){
   const[expanded,setExpanded]=useState(()=>new Set(["m1","m2","m3","m4"]));
   const[doFilter,setDoFilter]=useState("today");
   const[ctxFilter,setCtxFilter]=useState([]);
+  const[planStatusFilter,setPlanStatusFilter]=useState([]);
   const[doDateModal,setDoDateModal]=useState(null);
   const[projectPopup,setProjectPopup]=useState(null);
   const[projectPopupPath,setProjectPopupPath]=useState([]);
@@ -1090,6 +1151,7 @@ export default function Focus({userId}){
   function toggleExpand(id){setExpanded(e=>{const n=new Set(e);n.has(id)?n.delete(id):n.add(id);return n;});}
   function addContext(ctx){setContexts(p=>p.find(x=>x.key===ctx.key)?p:[...p,ctx]);}
   function toggleCtxFilter(key){setCtxFilter(p=>p.includes(key)?p.filter(k=>k!==key):[...p,key]);}
+  function togglePlanStatusFilter(key){setPlanStatusFilter(p=>p.includes(key)?p.filter(k=>k!==key):[...p,key]);}
 
   const today=todayS();
   const weekEnd=new Date();weekEnd.setDate(weekEnd.getDate()+7);
@@ -1105,7 +1167,31 @@ export default function Focus({userId}){
   const dashNotActionable=sortByPri(allActions.filter(x=>isOnOrBeforeToday(x.doDate)&&x.status!=="actionable"&&x.status!=="complete"));
   const roots=visibleItems.filter(x=>!x.parentId&&!isInboxItem(x));
   const inboxItems=visibleItems.filter(x=>isInboxItem(x));
+  const planItems=visibleItems.filter(x=>!isInboxItem(x));
+  const planItemById=new Map(planItems.map(item=>[item.id,item]));
+  const standaloneTaskItems=planItems.filter(item=>item.type==="task"&&!isInProjectHierarchy(item,planItemById));
+  const filteredPlanItems=filterTreeByStatuses(planItems,planStatusFilter);
+  const projectRoots=filteredPlanItems.filter(item=>item.type==="project"&&!item.parentId);
+  const filteredStandaloneTaskItems=filterTreeByStatuses(standaloneTaskItems,planStatusFilter);
+  const filteredStandaloneTaskItemIds=new Set(filteredStandaloneTaskItems.map(item=>item.id));
+  const standaloneTaskRoots=filteredStandaloneTaskItems.filter(item=>!item.parentId||!filteredStandaloneTaskItemIds.has(item.parentId));
+  const visiblePlanProjectIds=filteredPlanItems.filter(item=>item.type==="project").map(item=>item.id);
+  const allPlanProjectsExpanded=visiblePlanProjectIds.length>0&&visiblePlanProjectIds.every(id=>expanded.has(id));
+  const planProjectCount=projectRoots.length;
+  const planTaskCount=standaloneTaskRoots.length;
   const openToday=allActions.filter(x=>isOnOrBeforeToday(x.doDate)&&x.status!=="complete").length;
+
+  function setAllPlanProjectsExpanded(shouldExpand){
+    setExpanded(prev=>{
+      const next=new Set(prev);
+      if(shouldExpand){
+        visiblePlanProjectIds.forEach(id=>next.add(id));
+      } else {
+        visiblePlanProjectIds.forEach(id=>next.delete(id));
+      }
+      return next;
+    });
+  }
 
   if(dataLoading) return <div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"Georgia,serif"}}><div style={{fontStyle:"italic",fontSize:24,color:C.ink}}>Loading Focus…</div></div>;
 
@@ -1229,9 +1315,55 @@ export default function Focus({userId}){
         )}
 
         {view==="plan"&&(
-          <div style={{display:"flex",flexDirection:"column",gap:8}}>
-            {roots.map(item=><TreeItem key={item.id} item={item} items={visibleItems} allContexts={contexts} allStatuses={statuses} depth={0} onEdit={item=>setForm({item})} onAdd={pid=>setForm({item:{type:"task",parentId:pid,subtasks:[],contexts:[]}})} onDelete={deleteItem} onToggleSubtask={toggleSubtask} expanded={expanded} onToggleExpand={toggleExpand} onEditDoDate={item=>setDoDateModal(item)} onUpdate={updateTask} onJumpTo={jumpTo} onOpenProject={item=>openProjectPopup(item.id)}/>)}
-            {roots.length===0&&<div style={{textAlign:"center",padding:"48px 0",color:C.muted}}><div style={{...serifI,fontSize:22,marginBottom:8}}>Nothing here yet.</div></div>}
+          <div style={{display:"flex",flexDirection:"column",gap:12}}>
+            <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+              {statuses.map(status=><button key={status.key} onClick={()=>togglePlanStatusFilter(status.key)} style={{padding:"3px 10px",fontSize:11,cursor:"pointer",...sans,border:`1px solid ${planStatusFilter.includes(status.key)?`${status.color}55`:C.line}`,borderRadius:999,background:planStatusFilter.includes(status.key)?`${status.color}12`:"transparent",color:planStatusFilter.includes(status.key)?status.color:C.muted}}>{status.label}</button>)}
+              {planStatusFilter.length>0&&<button onClick={()=>setPlanStatusFilter([])} style={{padding:"3px 10px",fontSize:11,cursor:"pointer",...sans,border:`1px solid ${C.line}`,borderRadius:999,background:"transparent",color:C.muted}}>Clear</button>}
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(320px, 1fr))",gap:12,alignItems:"start"}}>
+              <div style={{background:C.white,border:`1px solid ${C.line}`,borderRadius:12,display:"flex",flexDirection:"column",minHeight:220,overflow:"hidden"}}>
+                <div style={{padding:"14px 16px 12px",borderBottom:`1px solid ${C.line}`,display:"flex",alignItems:"center",gap:8}}>
+                  <span style={{fontSize:14}}>◈</span>
+                  <div style={{...mono,fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:1.2,fontWeight:600}}>Projects</div>
+                  <button
+                    onClick={()=>setAllPlanProjectsExpanded(!allPlanProjectsExpanded)}
+                    disabled={visiblePlanProjectIds.length===0}
+                    style={{
+                      ...sans,
+                      fontSize:11,
+                      background:"transparent",
+                      border:`1px solid ${visiblePlanProjectIds.length===0?C.line:C.line2}`,
+                      borderRadius:6,
+                      padding:"2px 8px",
+                      cursor:visiblePlanProjectIds.length===0?"default":"pointer",
+                      color:visiblePlanProjectIds.length===0?C.line2:C.ink2,
+                      marginLeft:"auto",
+                    }}>
+                    {allPlanProjectsExpanded?"Collapse all":"Expand all"}
+                  </button>
+                  <span style={{...mono,fontSize:10,color:C.muted,marginLeft:8}}>{planProjectCount}</span>
+                </div>
+                <div style={{flex:1,overflowY:"auto",padding:"10px 12px",display:"flex",flexDirection:"column",gap:6}}>
+                  {projectRoots.length===0
+                    ?<div style={{...serifI,fontSize:14,color:C.muted,textAlign:"center",padding:"20px 0"}}>No projects yet.</div>
+                    :projectRoots.map(item=><TreeItem key={item.id} item={item} items={filteredPlanItems} allContexts={contexts} allStatuses={statuses} depth={0} onEdit={item=>setForm({item})} onAdd={pid=>setForm({item:{type:"task",parentId:pid,subtasks:[],contexts:[]}})} onDelete={deleteItem} onToggleSubtask={toggleSubtask} expanded={expanded} onToggleExpand={toggleExpand} onEditDoDate={item=>setDoDateModal(item)} onUpdate={updateTask} onJumpTo={jumpTo} onOpenProject={item=>openProjectPopup(item.id)}/>)
+                  }
+                </div>
+              </div>
+              <div style={{background:C.white,border:`1px solid ${C.line}`,borderRadius:12,display:"flex",flexDirection:"column",minHeight:220,overflow:"hidden"}}>
+                <div style={{padding:"14px 16px 12px",borderBottom:`1px solid ${C.line}`,display:"flex",alignItems:"center",gap:8}}>
+                  <span style={{fontSize:14}}>○</span>
+                  <div style={{...mono,fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:1.2,fontWeight:600}}>Standalone Tasks</div>
+                  <span style={{...mono,fontSize:10,color:C.muted,marginLeft:"auto"}}>{planTaskCount}</span>
+                </div>
+                <div style={{flex:1,overflowY:"auto",padding:"10px 12px",display:"flex",flexDirection:"column",gap:6}}>
+                  {standaloneTaskRoots.length===0
+                    ?<div style={{...serifI,fontSize:14,color:C.muted,textAlign:"center",padding:"20px 0"}}>No standalone tasks.</div>
+                    :standaloneTaskRoots.map(item=><TreeItem key={item.id} item={item} items={filteredStandaloneTaskItems} allContexts={contexts} allStatuses={statuses} depth={0} onEdit={item=>setForm({item})} onAdd={pid=>setForm({item:{type:"task",parentId:pid,subtasks:[],contexts:[]}})} onDelete={deleteItem} onToggleSubtask={toggleSubtask} expanded={expanded} onToggleExpand={toggleExpand} onEditDoDate={item=>setDoDateModal(item)} onUpdate={updateTask} onJumpTo={jumpTo} onOpenProject={item=>openProjectPopup(item.id)}/>)
+                  }
+                </div>
+              </div>
+            </div>
             <button onClick={()=>setForm({item:{type:"project",subtasks:[],contexts:[]}})} style={{width:"100%",padding:"10px 0",background:"transparent",border:`1px dashed ${C.line2}`,borderRadius:10,fontSize:13,color:C.muted,cursor:"pointer",...sans,marginTop:4}}>+ New project</button>
           </div>
         )}
