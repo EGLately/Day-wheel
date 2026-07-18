@@ -73,6 +73,7 @@ const PRIORITIES = [
   { key:"normal", label:"!!",   color:"#4a6fa5" },
   { key:"low",    label:"!",    color:"#8b8378" },
 ];
+const PRIORITY_ORDER={urgent:0,high:1,normal:2,low:3};
 const SIZES = [{ key:"small",label:"S" },{ key:"medium",label:"M" },{ key:"large",label:"L" }];
 
 async function loadFocusData(userId) {
@@ -291,6 +292,32 @@ function getDescendants(items,id){const ch=getChildren(items,id);return ch.flatM
 function getActions(items,id){return getDescendants(items,id).filter(x=>x.type==="task");}
 function progressOf(items,id){const a=getActions(items,id);if(!a.length)return null;return Math.round(a.filter(x=>x.status==="complete").length/a.length*100);}
 function rollupDoDate(items,id){const a=getActions(items,id).filter(x=>x.doDate&&x.status!=="complete");if(!a.length)return null;return a.map(x=>x.doDate).sort()[0];}
+function compareNullableDate(a,b){
+  const av=a||"9999-99-99";
+  const bv=b||"9999-99-99";
+  if(av<bv) return -1;
+  if(av>bv) return 1;
+  return 0;
+}
+function sortItemsByMode(items,mode){
+  if(!mode) return items;
+  const sorted=[...items];
+  sorted.sort((a,b)=>{
+    let result=0;
+    if(mode==="title") result=(a.title||"").localeCompare(b.title||"");
+    else if(mode==="status") result=(a.status||"").localeCompare(b.status||"");
+    else if(mode==="priority"){
+      const ap=PRIORITY_ORDER[a.priority]??99;
+      const bp=PRIORITY_ORDER[b.priority]??99;
+      result=ap-bp;
+    }
+    else if(mode==="doDate") result=compareNullableDate(a.doDate,b.doDate);
+    else if(mode==="dueDate") result=compareNullableDate(a.dueDate,b.dueDate);
+    if(result!==0) return result;
+    return (a.title||"").localeCompare(b.title||"");
+  });
+  return sorted;
+}
 
 function ContextTag({ctx,small}){
   return <span style={{...mono,fontSize:small?9:10,color:C.ink2,background:C.bg2,border:`1px solid ${C.line2}`,borderRadius:5,padding:small?"1px 5px":"2px 7px",whiteSpace:"nowrap"}}>{ctx.label}</span>;
@@ -467,7 +494,7 @@ function ItemForm({item,items,allContexts,allStatuses,onSave,onClose,onAddContex
   const containers=items.filter(x=>x.type==="project"&&x.id!==item.id);
   function toggleCtx(key){setContexts(p=>p.includes(key)?p.filter(k=>k!==key):[...p,key]);}
   function addCustomCtx(){if(!newCtxLabel.trim())return;const key=newCtxLabel.trim().toLowerCase().replace(/\s+/g,"-");onAddContext({key,label:newCtxLabel.trim(),color:"#8b8378"});setContexts(p=>[...p,key]);setNewCtxLabel("");}
-  function save(){if(!title.trim())return;const rec=type==="task"&&recurrence?{...recurrence,seriesId:recurrence.seriesId||item.id||nid()}:null;onSave({...item,id:item.id??nid(),type,title:title.trim(),description:desc.trim(),status,waitingFor:status==="waiting"?waitingFor:"",priority:type==="task"?priority:null,size:type==="task"?size:null,dueDate:dueDate||null,doDate:type==="task"?(doDate||null):null,parentId:parentId||null,contexts,subtasks:type==="task"?subtasks:[],recurrence:rec});}
+  function save(){if(!title.trim())return;const rec=type==="task"&&recurrence?{...recurrence,seriesId:recurrence.seriesId||item.id||nid()}:null;onSave({...item,id:item.id??nid(),type,title:title.trim(),description:desc.trim(),status,waitingFor:status==="waiting"?waitingFor:"",priority:priority||null,size:type==="task"?size:null,dueDate:dueDate||null,doDate:type==="task"?(doDate||null):null,parentId:parentId||null,contexts,subtasks:type==="task"?subtasks:[],recurrence:rec});}
   const segBtn=(val,set,opts)=><div style={{display:"flex",flexWrap:"wrap",gap:4}}>{opts.map(o=><button key={o.key} onClick={()=>set(o.key)} style={{padding:"4px 10px",fontSize:11,cursor:"pointer",...sans,border:`1px solid ${val===o.key?C.ink:C.line}`,borderRadius:6,background:val===o.key?C.ink:"transparent",color:val===o.key?C.white:C.muted}}>{o.label}</button>)}</div>;
   return(
     <div style={{position:"fixed",inset:0,zIndex:500,background:"rgba(0,0,0,0.35)",display:"flex",alignItems:"center",justifyContent:"center"}} onClick={e=>e.target===e.currentTarget&&onClose()}>
@@ -479,8 +506,8 @@ function ItemForm({item,items,allContexts,allStatuses,onSave,onClose,onAddContex
         <div style={{display:"flex",gap:10,alignItems:"center"}}><div style={{...mono,fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:1,width:64}}>Parent</div><select value={parentId??""} onChange={e=>setParentId(e.target.value||null)} style={{...sans,flex:1,fontSize:13,color:C.ink,background:C.bg,border:`1px solid ${C.line}`,borderRadius:6,padding:"6px 8px",outline:"none"}}><option value="">— None —</option>{containers.map(c=><option key={c.id} value={c.id}>{c.title}</option>)}</select></div>
         <div style={{display:"flex",gap:10,alignItems:"flex-start"}}><div style={{...mono,fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:1,width:64,paddingTop:6}}>Status</div><div style={{flex:1,display:"flex",flexDirection:"column",gap:6}}>{segBtn(status,setStatus,STATUSES_F)}{status==="waiting"&&<input value={waitingFor} onChange={e=>setWaiting(e.target.value)} placeholder="Waiting for who/what?" style={{...sans,fontSize:13,color:C.ink,background:C.bg,border:`1px solid ${C.line}`,borderRadius:6,padding:"6px 10px",outline:"none"}}/>}</div></div>
         <div style={{display:"flex",gap:10,alignItems:"flex-start"}}><div style={{...mono,fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:1,width:64,paddingTop:6}}>Context</div><div style={{flex:1,display:"flex",flexDirection:"column",gap:8}}><div style={{display:"flex",flexWrap:"wrap",gap:4}}>{allContexts.map(ctx=><button key={ctx.key} onClick={()=>toggleCtx(ctx.key)} style={{padding:"4px 10px",fontSize:11,cursor:"pointer",...sans,border:`1px solid ${contexts.includes(ctx.key)?C.ink:C.line}`,borderRadius:6,background:contexts.includes(ctx.key)?C.bg2:"transparent",color:contexts.includes(ctx.key)?C.ink2:C.muted}}>{ctx.label}</button>)}</div><div style={{display:"flex",gap:6}}><input value={newCtxLabel} onChange={e=>setNewCtxLabel(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addCustomCtx()} placeholder="Add custom context…" style={{...sans,flex:1,fontSize:12,color:C.ink,background:C.bg,border:`1px solid ${C.line}`,borderRadius:6,padding:"5px 8px",outline:"none"}}/><button onClick={addCustomCtx} style={{...sans,fontSize:12,background:"transparent",border:`1px solid ${C.line}`,borderRadius:6,padding:"5px 10px",cursor:"pointer",color:C.muted}}>Add</button></div></div></div>
+        <div style={{display:"flex",gap:10,alignItems:"center"}}><div style={{...mono,fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:1,width:64}}>Priority</div><div style={{display:"flex",flexWrap:"wrap",gap:4}}>{PRIORITIES.map(o=><button key={o.key} onClick={()=>setPriority(p=>p===o.key?"":o.key)} style={{padding:"4px 10px",fontSize:11,cursor:"pointer",...sans,border:`1px solid ${priority===o.key?o.color:C.line}`,borderRadius:6,background:priority===o.key?`${o.color}20`:"transparent",color:priority===o.key?o.color:C.muted}}>{o.label}</button>)}{priority&&<button onClick={()=>setPriority("")} style={{padding:"4px 8px",fontSize:11,cursor:"pointer",...sans,border:`1px solid ${C.line}`,borderRadius:6,background:"transparent",color:C.muted}}>✕</button>}</div></div>
         {type==="task"&&<>
-          <div style={{display:"flex",gap:10,alignItems:"center"}}><div style={{...mono,fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:1,width:64}}>Priority</div><div style={{display:"flex",flexWrap:"wrap",gap:4}}>{PRIORITIES.map(o=><button key={o.key} onClick={()=>setPriority(p=>p===o.key?"":o.key)} style={{padding:"4px 10px",fontSize:11,cursor:"pointer",...sans,border:`1px solid ${priority===o.key?o.color:C.line}`,borderRadius:6,background:priority===o.key?`${o.color}20`:"transparent",color:priority===o.key?o.color:C.muted}}>{o.label}</button>)}{priority&&<button onClick={()=>setPriority("")} style={{padding:"4px 8px",fontSize:11,cursor:"pointer",...sans,border:`1px solid ${C.line}`,borderRadius:6,background:"transparent",color:C.muted}}>✕</button>}</div></div>
           <div style={{display:"flex",gap:10,alignItems:"center"}}><div style={{...mono,fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:1,width:64}}>Size</div>{segBtn(size,setSize,SIZES)}</div>
           <div style={{display:"flex",gap:10,alignItems:"center"}}><div style={{...mono,fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:1,width:64}}>Do date</div><input type="date" value={doDate} onChange={e=>setDoDate(e.target.value)} style={{...mono,fontSize:13,color:C.ink,background:C.bg,border:`1px solid ${C.line}`,borderRadius:6,padding:"5px 8px",outline:"none"}}/>{doDate&&<button onClick={()=>setDoDate("")} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:14}}>×</button>}</div>
           <RecurrenceSection recurrence={recurrence} onChange={setRecurrence}/>
@@ -643,13 +670,14 @@ function ActionRow({item,items,allContexts,allStatuses,onEdit,onToggleStatus,onU
 }
 
 // ── TreeItem (Plan view) — now uses same card body as ActionRow ─────────────
-function TreeItem({item,items,allContexts,allStatuses,depth,onEdit,onAdd,onDelete,onToggleSubtask,expanded,onToggleExpand,onEditDoDate,onUpdate,onJumpTo,onOpenProject}){
+function TreeItem({item,items,allContexts,allStatuses,depth,onEdit,onAdd,onDelete,onToggleSubtask,expanded,onToggleExpand,onEditDoDate,onUpdate,onJumpTo,onOpenProject,sortMode}){
   const children=getChildren(items,item.id);
   const isExpanded=expanded.has(item.id);
   const isProject=item.type==="project";
   const isDone=item.status==="complete";
   const pct=isProject?progressOf(items,item.id):null;
   const rolledDo=isProject?rollupDoDate(items,item.id):null;
+  const projectPriority=isProject?PRIORITIES.find(p=>p.key===item.priority):null;
   const suppressOpenRef=useRef(false);
 
   if(isProject){
@@ -659,11 +687,12 @@ function TreeItem({item,items,allContexts,allStatuses,depth,onEdit,onAdd,onDelet
           <button onClick={(e)=>{e.stopPropagation();children.length&&onToggleExpand(item.id);}} style={{width:18,height:18,flexShrink:0,marginTop:3,fontSize:12,color:C.muted,background:"transparent",border:"none",cursor:children.length?"pointer":"default",padding:0,display:"flex",alignItems:"center",justifyContent:"center"}}>{children.length?(isExpanded?"▾":"▸"):"◈"}</button>
           <div style={{flex:1,minWidth:0}}>
             <div style={{display:"flex",alignItems:"center",gap:6,paddingLeft:18,marginBottom:3}}><span style={{...mono,fontSize:9,color:"#8a6a1a"}}>{children.length} {children.length===1?"item":"items"}</span></div>
-            {/* Row 1: title (no priority pill for projects) */}
+            {/* Row 1: title + optional project priority */}
             <div style={{display:"flex",alignItems:"baseline",gap:6}}>
               <EditableText text={item.title} onSave={t=>onUpdate?onUpdate(item.id,{title:t}):onEdit&&onEdit({...item,title:t})} onClick={()=>onOpenProject?.(item)} style={{...serif,fontSize:14,color:C.ink,flex:1}}>
                 <span style={{fontSize:11,marginRight:4,opacity:0.7}}>◈</span>
               </EditableText>
+              {projectPriority&&<span style={{...mono,fontSize:10,fontWeight:700,border:`1px solid ${projectPriority.color}50`,borderRadius:5,padding:"0px 6px",lineHeight:"18px",background:`${projectPriority.color}18`,color:projectPriority.color}}>{projectPriority.label}</span>}
             </div>
 
             {/* Row 2+3: description as "breadcrumb" analog + do/due dates */}
@@ -691,7 +720,7 @@ function TreeItem({item,items,allContexts,allStatuses,depth,onEdit,onAdd,onDelet
         </div>
         {isExpanded&&children.length>0&&(
           <div style={{marginTop:6,marginLeft:depth*18+18,display:"flex",flexDirection:"column",gap:6}}>
-            {children.map(child=><TreeItem key={child.id} item={child} items={items} allContexts={allContexts} allStatuses={allStatuses} depth={depth+1} onEdit={onEdit} onAdd={onAdd} onDelete={onDelete} onToggleSubtask={onToggleSubtask} expanded={expanded} onToggleExpand={onToggleExpand} onEditDoDate={onEditDoDate} onUpdate={onUpdate} onJumpTo={onJumpTo} onOpenProject={onOpenProject}/>)}
+            {sortItemsByMode(children,sortMode).map(child=><TreeItem key={child.id} item={child} items={items} allContexts={allContexts} allStatuses={allStatuses} depth={depth+1} onEdit={onEdit} onAdd={onAdd} onDelete={onDelete} onToggleSubtask={onToggleSubtask} expanded={expanded} onToggleExpand={onToggleExpand} onEditDoDate={onEditDoDate} onUpdate={onUpdate} onJumpTo={onJumpTo} onOpenProject={onOpenProject} sortMode={sortMode}/>) }
             <button onClick={()=>onAdd(item.id)} style={{display:"block",width:"100%",padding:"6px 0",background:"transparent",border:`1px dashed ${C.line2}`,borderRadius:6,fontSize:12,color:C.muted,cursor:"pointer",...sans,textAlign:"center"}}>+ Add inside {item.title}</button>
           </div>
         )}
@@ -714,7 +743,7 @@ function TreeItem({item,items,allContexts,allStatuses,depth,onEdit,onAdd,onDelet
       </div>
       {isExpanded&&children.length>0&&(
         <div style={{marginTop:6,marginLeft:18,display:"flex",flexDirection:"column",gap:6}}>
-          {children.map(child=><TreeItem key={child.id} item={child} items={items} allContexts={allContexts} allStatuses={allStatuses} depth={depth+1} onEdit={onEdit} onAdd={onAdd} onDelete={onDelete} onToggleSubtask={onToggleSubtask} expanded={expanded} onToggleExpand={onToggleExpand} onEditDoDate={onEditDoDate} onUpdate={onUpdate} onJumpTo={onJumpTo} onOpenProject={onOpenProject}/>)}
+          {sortItemsByMode(children,sortMode).map(child=><TreeItem key={child.id} item={child} items={items} allContexts={allContexts} allStatuses={allStatuses} depth={depth+1} onEdit={onEdit} onAdd={onAdd} onDelete={onDelete} onToggleSubtask={onToggleSubtask} expanded={expanded} onToggleExpand={onToggleExpand} onEditDoDate={onEditDoDate} onUpdate={onUpdate} onJumpTo={onJumpTo} onOpenProject={onOpenProject} sortMode={sortMode}/>) }
         </div>
       )}
     </div>
@@ -950,6 +979,8 @@ export default function Focus({userId}){
   const[doFilter,setDoFilter]=useState("today");
   const[ctxFilter,setCtxFilter]=useState([]);
   const[planStatusFilter,setPlanStatusFilter]=useState([]);
+  const[planProjectSort,setPlanProjectSort]=useState("title");
+  const[planTaskSort,setPlanTaskSort]=useState("priority");
   const[doDateModal,setDoDateModal]=useState(null);
   const[projectPopup,setProjectPopup]=useState(null);
   const[projectPopupPath,setProjectPopupPath]=useState([]);
@@ -1171,10 +1202,10 @@ export default function Focus({userId}){
   const planItemById=new Map(planItems.map(item=>[item.id,item]));
   const standaloneTaskItems=planItems.filter(item=>item.type==="task"&&!isInProjectHierarchy(item,planItemById));
   const filteredPlanItems=filterTreeByStatuses(planItems,planStatusFilter);
-  const projectRoots=filteredPlanItems.filter(item=>item.type==="project"&&!item.parentId);
+  const projectRoots=sortItemsByMode(filteredPlanItems.filter(item=>item.type==="project"&&!item.parentId),planProjectSort);
   const filteredStandaloneTaskItems=filterTreeByStatuses(standaloneTaskItems,planStatusFilter);
   const filteredStandaloneTaskItemIds=new Set(filteredStandaloneTaskItems.map(item=>item.id));
-  const standaloneTaskRoots=filteredStandaloneTaskItems.filter(item=>!item.parentId||!filteredStandaloneTaskItemIds.has(item.parentId));
+  const standaloneTaskRoots=sortItemsByMode(filteredStandaloneTaskItems.filter(item=>!item.parentId||!filteredStandaloneTaskItemIds.has(item.parentId)),planTaskSort);
   const visiblePlanProjectIds=filteredPlanItems.filter(item=>item.type==="project").map(item=>item.id);
   const allPlanProjectsExpanded=visiblePlanProjectIds.length>0&&visiblePlanProjectIds.every(id=>expanded.has(id));
   const planProjectCount=projectRoots.length;
@@ -1325,6 +1356,13 @@ export default function Focus({userId}){
                 <div style={{padding:"14px 16px 12px",borderBottom:`1px solid ${C.line}`,display:"flex",alignItems:"center",gap:8}}>
                   <span style={{fontSize:14}}>◈</span>
                   <div style={{...mono,fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:1.2,fontWeight:600}}>Projects</div>
+                  <select value={planProjectSort} onChange={e=>setPlanProjectSort(e.target.value)} style={{...sans,fontSize:11,background:C.bg,border:`1px solid ${C.line}`,borderRadius:6,padding:"2px 6px",color:C.ink2,marginLeft:"auto"}}>
+                    <option value="title">Sort: Title</option>
+                    <option value="status">Sort: Status</option>
+                    <option value="priority">Sort: Priority</option>
+                    <option value="doDate">Sort: Do date</option>
+                    <option value="dueDate">Sort: Due date</option>
+                  </select>
                   <button
                     onClick={()=>setAllPlanProjectsExpanded(!allPlanProjectsExpanded)}
                     disabled={visiblePlanProjectIds.length===0}
@@ -1337,7 +1375,7 @@ export default function Focus({userId}){
                       padding:"2px 8px",
                       cursor:visiblePlanProjectIds.length===0?"default":"pointer",
                       color:visiblePlanProjectIds.length===0?C.line2:C.ink2,
-                      marginLeft:"auto",
+                      marginLeft:4,
                     }}>
                     {allPlanProjectsExpanded?"Collapse all":"Expand all"}
                   </button>
@@ -1346,7 +1384,7 @@ export default function Focus({userId}){
                 <div style={{flex:1,overflowY:"auto",padding:"10px 12px",display:"flex",flexDirection:"column",gap:6}}>
                   {projectRoots.length===0
                     ?<div style={{...serifI,fontSize:14,color:C.muted,textAlign:"center",padding:"20px 0"}}>No projects yet.</div>
-                    :projectRoots.map(item=><TreeItem key={item.id} item={item} items={filteredPlanItems} allContexts={contexts} allStatuses={statuses} depth={0} onEdit={item=>setForm({item})} onAdd={pid=>setForm({item:{type:"task",parentId:pid,subtasks:[],contexts:[]}})} onDelete={deleteItem} onToggleSubtask={toggleSubtask} expanded={expanded} onToggleExpand={toggleExpand} onEditDoDate={item=>setDoDateModal(item)} onUpdate={updateTask} onJumpTo={jumpTo} onOpenProject={item=>openProjectPopup(item.id)}/>)
+                    :projectRoots.map(item=><TreeItem key={item.id} item={item} items={filteredPlanItems} allContexts={contexts} allStatuses={statuses} depth={0} onEdit={item=>setForm({item})} onAdd={pid=>setForm({item:{type:"task",parentId:pid,subtasks:[],contexts:[]}})} onDelete={deleteItem} onToggleSubtask={toggleSubtask} expanded={expanded} onToggleExpand={toggleExpand} onEditDoDate={item=>setDoDateModal(item)} onUpdate={updateTask} onJumpTo={jumpTo} onOpenProject={item=>openProjectPopup(item.id)} sortMode={planProjectSort}/>)
                   }
                 </div>
               </div>
@@ -1354,12 +1392,19 @@ export default function Focus({userId}){
                 <div style={{padding:"14px 16px 12px",borderBottom:`1px solid ${C.line}`,display:"flex",alignItems:"center",gap:8}}>
                   <span style={{fontSize:14}}>○</span>
                   <div style={{...mono,fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:1.2,fontWeight:600}}>Standalone Tasks</div>
-                  <span style={{...mono,fontSize:10,color:C.muted,marginLeft:"auto"}}>{planTaskCount}</span>
+                  <select value={planTaskSort} onChange={e=>setPlanTaskSort(e.target.value)} style={{...sans,fontSize:11,background:C.bg,border:`1px solid ${C.line}`,borderRadius:6,padding:"2px 6px",color:C.ink2,marginLeft:"auto"}}>
+                    <option value="priority">Sort: Priority</option>
+                    <option value="title">Sort: Title</option>
+                    <option value="status">Sort: Status</option>
+                    <option value="doDate">Sort: Do date</option>
+                    <option value="dueDate">Sort: Due date</option>
+                  </select>
+                  <span style={{...mono,fontSize:10,color:C.muted,marginLeft:8}}>{planTaskCount}</span>
                 </div>
                 <div style={{flex:1,overflowY:"auto",padding:"10px 12px",display:"flex",flexDirection:"column",gap:6}}>
                   {standaloneTaskRoots.length===0
                     ?<div style={{...serifI,fontSize:14,color:C.muted,textAlign:"center",padding:"20px 0"}}>No standalone tasks.</div>
-                    :standaloneTaskRoots.map(item=><TreeItem key={item.id} item={item} items={filteredStandaloneTaskItems} allContexts={contexts} allStatuses={statuses} depth={0} onEdit={item=>setForm({item})} onAdd={pid=>setForm({item:{type:"task",parentId:pid,subtasks:[],contexts:[]}})} onDelete={deleteItem} onToggleSubtask={toggleSubtask} expanded={expanded} onToggleExpand={toggleExpand} onEditDoDate={item=>setDoDateModal(item)} onUpdate={updateTask} onJumpTo={jumpTo} onOpenProject={item=>openProjectPopup(item.id)}/>)
+                    :standaloneTaskRoots.map(item=><TreeItem key={item.id} item={item} items={filteredStandaloneTaskItems} allContexts={contexts} allStatuses={statuses} depth={0} onEdit={item=>setForm({item})} onAdd={pid=>setForm({item:{type:"task",parentId:pid,subtasks:[],contexts:[]}})} onDelete={deleteItem} onToggleSubtask={toggleSubtask} expanded={expanded} onToggleExpand={toggleExpand} onEditDoDate={item=>setDoDateModal(item)} onUpdate={updateTask} onJumpTo={jumpTo} onOpenProject={item=>openProjectPopup(item.id)} sortMode={planTaskSort}/>)
                   }
                 </div>
               </div>
