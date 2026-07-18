@@ -395,7 +395,6 @@ export default function DayWheel({userId,onSignOut}){
   async function commitToTemplate(){const next={...templates,[baseTpl.id]:{...workingCopy,id:baseTpl.id}};setTemplates(next);await saveUserData(userId,{templates:next,override_id:overrideId,override_date:overrideDate});setSaveMsg("Saved");setTimeout(()=>setSaveMsg(null),2500);}
   function discardChanges(){setWorkingCopy({...baseTpl});setSelectedId(null);}
   async function saveAsNew(name){const id=`custom_${Date.now()}`;const newTpl={...workingCopy,id,name:name||"New Template",builtIn:false,schedule:workingCopy.schedule.map(s=>({...s,id:nid()}))};const next={...templates,[id]:newTpl};setTemplates(next);setWorkingCopy(newTpl);setOverrideId(id);setOverrideDate(todayS());await saveUserData(userId,{templates:next,override_id:id,override_date:todayS()});setSaveMsg("Saved as new template");setTimeout(()=>setSaveMsg(null),2500);}
-  function saveForToday(){const id=`today_${todayS()}`;setTemplates(t=>({...t,[id]:{...workingCopy,id,name:`${baseTpl.name} (today)`,builtIn:false}}));setOverrideId(id);setOverrideDate(todayS());}
   function advanceToTomorrow(sliceId){setChecklist(prev=>{const next={...prev};Object.keys(next).forEach(k=>{if(k.startsWith(`${sliceId}_`))delete next[k];});return next;});setTomorrowIds(prev=>({...prev,[sliceId]:true}));}
   function undoAdvance(sliceId){setTomorrowIds(prev=>{const next={...prev};delete next[sliceId];return next;});}
   function advanceAllPast(){const lm=now.getHours()*60+now.getMinutes();const wt=ranged.find(s=>s.isSleep)?.endMin??360;const toAbs=m=>{const mm=((m%1440)+1440)%1440;return mm>=wt?mm:mm+1440;};const la=toAbs(lm);const ps=ranged.filter(sl=>!sl.isSleep&&!(tomorrowIds??{})[sl.id]&&!(current&&sl.id===current.id)&&toAbs(sl.endMin)<=la);if(!ps.length)return;setChecklist(prev=>{const next={...prev};ps.forEach(sl=>{Object.keys(next).forEach(k=>{if(k.startsWith(`${sl.id}_`))delete next[k];});});return next;});setTomorrowIds(prev=>{const next={...prev};ps.forEach(sl=>{next[sl.id]=true;});return next;});}
@@ -485,7 +484,7 @@ export default function DayWheel({userId,onSignOut}){
 
       {catModal&&<CatModal cats={cats} templates={templates} goals={goals} onAdd={addCat} onUpdate={updateCat} onDelete={deleteCat} onSetGoal={setGoal} onClose={()=>setCatModal(false)} tplName={activeTpl.name}/>}
       {saveMsg&&<div style={{position:"fixed",bottom:60,left:"50%",transform:"translateX(-50%)",background:"#3a6b3a",color:"#fff",padding:"8px 20px",borderRadius:999,fontSize:13,fontFamily:"Inter",zIndex:600}}>{saveMsg}</div>}
-      {isDirty&&<UnsavedBar tplName={baseTpl.name} onDiscard={discardChanges} onSaveToday={saveForToday} onSaveTemplate={commitToTemplate} onSaveNew={saveAsNew}/>}
+      {isDirty&&<UnsavedBar tplName={baseTpl.name} onDiscard={discardChanges} onSaveTemplate={commitToTemplate} onSaveNew={saveAsNew}/>}
     </div>
     </>
   );
@@ -748,7 +747,7 @@ function RoutineEditor({slice,subs,total,updateField,cats,setSelectedId,onUpdate
   );
 }
 
-function UnsavedBar({tplName,onDiscard,onSaveToday,onSaveTemplate,onSaveNew}){
+function UnsavedBar({tplName,onDiscard,onSaveTemplate,onSaveNew}){
   const[showSaveNew,setShowSaveNew]=useState(false);
   const[newName,setNewName]=useState("");
   const inputRef=useRef(null);
@@ -766,9 +765,8 @@ function UnsavedBar({tplName,onDiscard,onSaveToday,onSaveTemplate,onSaveNew}){
       ):(
         <div style={{display:"flex",alignItems:"center",gap:8}}>
           <button onClick={onDiscard} style={barBtn("transparent","rgba(255,255,255,0.7)","1px solid rgba(255,255,255,0.25)")}>Discard</button>
-          <button onClick={onSaveToday} style={barBtn("transparent",C.white,"1px solid rgba(255,255,255,0.4)")}>Just for today</button>
-          <button onClick={onSaveTemplate} style={barBtn("transparent",C.white,"1px solid rgba(255,255,255,0.4)")}>Save to template</button>
-          <button onClick={()=>{setShowSaveNew(true);setNewName(`${tplName} (copy)`);}} style={barBtn("#fbf9f4",C.ink)}>Save as new</button>
+          <button onClick={onSaveTemplate} style={barBtn("transparent",C.white,"1px solid rgba(255,255,255,0.4)")}>Save</button>
+          <button onClick={()=>{setShowSaveNew(true);setNewName(`${tplName} (copy)`);}} style={barBtn("#fbf9f4",C.ink)}>Create New Template</button>
         </div>
       )}
     </div>
