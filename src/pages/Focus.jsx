@@ -58,6 +58,7 @@ async function saveFocusData(userId, payload) {
 }
 function nid() { return `i${Date.now()}_${Math.random().toString(36).slice(2,6)}`; }
 function todayS() { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; }
+function isOnOrBeforeToday(date){ return !!date && date <= todayS(); }
 function fmtDate(d) { if(!d)return null; const[y,m,day]=d.split("-"); return `${parseInt(m)}/${parseInt(day)}/${y.slice(2)}`; }
 
 // ── Recurrence engine ──────────────────────────────────────────────────────────
@@ -1019,14 +1020,14 @@ export default function Focus({userId}){
   const sortByPri=arr=>[...arr].sort((a,b)=>{const pa=PRI_ORDER[a.priority]??4,pb=PRI_ORDER[b.priority]??4;if(pa!==pb)return pa-pb;const ad=a.doDate??"9999",bd=b.doDate??"9999";return ad<bd?-1:ad>bd?1:0;});
   const visibleItems=showCompleted?items:items.filter(x=>x.status!=="complete");
   const allActions=visibleItems.filter(x=>x.type==="task"&&!isInboxItem(x));
-  let filteredActions=allActions.filter(x=>{if(doFilter==="today")return x.doDate===today;if(doFilter==="week")return x.doDate&&x.doDate<=weekEndS;return true;});
+  let filteredActions=allActions.filter(x=>{if(doFilter==="today")return isOnOrBeforeToday(x.doDate);if(doFilter==="week")return x.doDate&&x.doDate<=weekEndS;return true;});
   if(ctxFilter.length>0)filteredActions=filteredActions.filter(x=>ctxFilter.every(k=>x.contexts?.includes(k)));
   filteredActions=sortByPri(filteredActions);
-  const dashActionable=sortByPri(allActions.filter(x=>x.doDate===today&&x.status==="actionable"));
-  const dashNotActionable=sortByPri(allActions.filter(x=>x.doDate===today&&x.status!=="actionable"&&x.status!=="complete"));
+  const dashActionable=sortByPri(allActions.filter(x=>isOnOrBeforeToday(x.doDate)&&x.status==="actionable"));
+  const dashNotActionable=sortByPri(allActions.filter(x=>isOnOrBeforeToday(x.doDate)&&x.status!=="actionable"&&x.status!=="complete"));
   const roots=visibleItems.filter(x=>!x.parentId&&!isInboxItem(x));
   const inboxItems=visibleItems.filter(x=>isInboxItem(x));
-  const openToday=allActions.filter(x=>x.doDate===today&&x.status!=="complete").length;
+  const openToday=allActions.filter(x=>isOnOrBeforeToday(x.doDate)&&x.status!=="complete").length;
 
   if(dataLoading) return <div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"Georgia,serif"}}><div style={{fontStyle:"italic",fontSize:24,color:C.ink}}>Loading Focus…</div></div>;
 
