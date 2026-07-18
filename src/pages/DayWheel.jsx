@@ -421,11 +421,8 @@ export default function DayWheel({userId,onSignOut}){
             </div>
             <div style={{marginTop:4,fontSize:11.5,color:C.muted,letterSpacing:.3}}>A 24-hour map of how the day moves.</div>
             <div style={{display:"flex",gap:8,marginTop:10,flexWrap:"wrap"}}>
-              <button onClick={()=>setShowTemplatePanel(v=>!v)} style={{background:showTemplatePanel?C.ink:"transparent",color:showTemplatePanel?C.white:C.ink2,border:`1px solid ${showTemplatePanel?C.ink:C.line2}`,padding:"5px 10px",borderRadius:999,fontSize:11,cursor:"pointer",fontFamily:"Inter"}}>
-                {showTemplatePanel?"Hide template":"Show template"}
-              </button>
-              <button onClick={()=>setShowRightPanel(v=>!v)} style={{background:showRightPanel?C.ink:"transparent",color:showRightPanel?C.white:C.ink2,border:`1px solid ${showRightPanel?C.ink:C.line2}`,padding:"5px 10px",borderRadius:999,fontSize:11,cursor:"pointer",fontFamily:"Inter"}}>
-                {showRightPanel?"Hide details":"Show details"}
+              <button onClick={()=>{const next=!(showTemplatePanel&&showRightPanel);setShowTemplatePanel(next);setShowRightPanel(next);}} style={{background:showTemplatePanel&&showRightPanel?C.ink:"transparent",color:showTemplatePanel&&showRightPanel?C.white:C.ink2,border:`1px solid ${showTemplatePanel&&showRightPanel?C.ink:C.line2}`,padding:"5px 10px",borderRadius:999,fontSize:11,cursor:"pointer",fontFamily:"Inter"}}>
+                {showTemplatePanel&&showRightPanel?"Hide Details":"Show Details"}
               </button>
             </div>
           </header>
