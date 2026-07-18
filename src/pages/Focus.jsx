@@ -814,6 +814,7 @@ export default function Focus({userId}){
   const[projectPopup,setProjectPopup]=useState(null);
   const[projectPopupPath,setProjectPopupPath]=useState([]);
   const[settingsOpen,setSettingsOpen]=useState(false);
+  const[showCompleted,setShowCompleted]=useState(false);
   useEffect(()=>{
     async function load(){
       const saved = await loadFocusData(userId);
@@ -1016,14 +1017,15 @@ export default function Focus({userId}){
   const weekEndS=weekEnd.toISOString().slice(0,10);
   const PRI_ORDER={urgent:0,high:1,normal:2,low:3};
   const sortByPri=arr=>[...arr].sort((a,b)=>{const pa=PRI_ORDER[a.priority]??4,pb=PRI_ORDER[b.priority]??4;if(pa!==pb)return pa-pb;const ad=a.doDate??"9999",bd=b.doDate??"9999";return ad<bd?-1:ad>bd?1:0;});
-  const allActions=items.filter(x=>x.type==="task"&&!isInboxItem(x));
+  const visibleItems=showCompleted?items:items.filter(x=>x.status!=="complete");
+  const allActions=visibleItems.filter(x=>x.type==="task"&&!isInboxItem(x));
   let filteredActions=allActions.filter(x=>{if(doFilter==="today")return x.doDate===today;if(doFilter==="week")return x.doDate&&x.doDate<=weekEndS;return true;});
   if(ctxFilter.length>0)filteredActions=filteredActions.filter(x=>ctxFilter.every(k=>x.contexts?.includes(k)));
   filteredActions=sortByPri(filteredActions);
   const dashActionable=sortByPri(allActions.filter(x=>x.doDate===today&&x.status==="actionable"));
   const dashNotActionable=sortByPri(allActions.filter(x=>x.doDate===today&&x.status!=="actionable"&&x.status!=="complete"));
-  const roots=items.filter(x=>!x.parentId&&!isInboxItem(x));
-  const inboxItems=items.filter(x=>isInboxItem(x));
+  const roots=visibleItems.filter(x=>!x.parentId&&!isInboxItem(x));
+  const inboxItems=visibleItems.filter(x=>isInboxItem(x));
   const openToday=allActions.filter(x=>x.doDate===today&&x.status!=="complete").length;
 
   if(dataLoading) return <div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"Georgia,serif"}}><div style={{fontStyle:"italic",fontSize:24,color:C.ink}}>Loading Focus…</div></div>;
@@ -1039,6 +1041,11 @@ export default function Focus({userId}){
           </div>
         </div>
         <div style={{display:"flex",gap:8,alignItems:"center",justifyContent:"flex-end",flexWrap:"wrap"}}>
+          <button
+            onClick={()=>setShowCompleted(v=>!v)}
+            style={{background:"transparent",border:`1px solid ${showCompleted?C.ink:C.line}`,color:showCompleted?C.ink2:C.muted,borderRadius:8,padding:"8px 12px",fontSize:12,cursor:"pointer",...sans,fontWeight:500}}>
+            {showCompleted?"Hide Completed":"Show Completed"}
+          </button>
           <button onClick={()=>setSettingsOpen(true)} style={{background:"transparent",border:`1px solid ${C.line}`,color:C.muted,borderRadius:8,padding:"8px 12px",fontSize:14,cursor:"pointer",...sans}}>⚙</button>
           <div style={{position:"relative"}} data-quickadd="1">
             <button onClick={()=>{setQuickAdd(v=>!v);setQuickText("");}} style={{background:C.ink,color:C.white,border:"none",borderRadius:8,padding:"8px 18px",fontSize:13,cursor:"pointer",...sans,fontWeight:600}}>+ Add</button>
@@ -1085,9 +1092,9 @@ export default function Focus({userId}){
       <div style={{padding:"20px 16px",maxWidth:1600,margin:"0 auto",width:"100%",boxSizing:"border-box"}}>
         {view==="dashboard"&&(
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(280px, 1fr))",gap:16,alignItems:"start"}}>
-            <DashPanel title="Actionable Today" icon="○" items={dashActionable} allItems={items} allContexts={contexts} allStatuses={statuses} onEdit={item=>setForm({item})} onToggleStatus={toggleStatus} onUpdate={updateTask} onJumpTo={jumpTo} emptyMsg="Nothing actionable today"/>
-            <DashPanel title="Not Actionable Today" icon="◌" items={dashNotActionable} allItems={items} allContexts={contexts} allStatuses={statuses} onEdit={item=>setForm({item})} onToggleStatus={toggleStatus} onUpdate={updateTask} onJumpTo={jumpTo} emptyMsg="Nothing else today"/>
-            <MilestonePanel items={items} allContexts={contexts} allStatuses={statuses} onEdit={item=>setForm({item})} onEditDoDate={item=>setDoDateModal(item)} onUpdate={updateTask} onOpenProject={item=>openProjectPopup(item.id)} />
+            <DashPanel title="Actionable Today" icon="○" items={dashActionable} allItems={visibleItems} allContexts={contexts} allStatuses={statuses} onEdit={item=>setForm({item})} onToggleStatus={toggleStatus} onUpdate={updateTask} onJumpTo={jumpTo} emptyMsg="Nothing actionable today"/>
+            <DashPanel title="Not Actionable Today" icon="◌" items={dashNotActionable} allItems={visibleItems} allContexts={contexts} allStatuses={statuses} onEdit={item=>setForm({item})} onToggleStatus={toggleStatus} onUpdate={updateTask} onJumpTo={jumpTo} emptyMsg="Nothing else today"/>
+            <MilestonePanel items={visibleItems} allContexts={contexts} allStatuses={statuses} onEdit={item=>setForm({item})} onEditDoDate={item=>setDoDateModal(item)} onUpdate={updateTask} onOpenProject={item=>openProjectPopup(item.id)} />
           </div>
         )}
         {view==="inbox"&&(
@@ -1135,7 +1142,7 @@ export default function Focus({userId}){
 
         {view==="plan"&&(
           <div style={{display:"flex",flexDirection:"column",gap:8}}>
-            {roots.map(item=><TreeItem key={item.id} item={item} items={items} allContexts={contexts} allStatuses={statuses} depth={0} onEdit={item=>setForm({item})} onAdd={pid=>setForm({item:{type:"task",parentId:pid,subtasks:[],contexts:[]}})} onDelete={deleteItem} onToggleSubtask={toggleSubtask} expanded={expanded} onToggleExpand={toggleExpand} onEditDoDate={item=>setDoDateModal(item)} onUpdate={updateTask} onJumpTo={jumpTo} onOpenProject={item=>openProjectPopup(item.id)}/>)}
+            {roots.map(item=><TreeItem key={item.id} item={item} items={visibleItems} allContexts={contexts} allStatuses={statuses} depth={0} onEdit={item=>setForm({item})} onAdd={pid=>setForm({item:{type:"task",parentId:pid,subtasks:[],contexts:[]}})} onDelete={deleteItem} onToggleSubtask={toggleSubtask} expanded={expanded} onToggleExpand={toggleExpand} onEditDoDate={item=>setDoDateModal(item)} onUpdate={updateTask} onJumpTo={jumpTo} onOpenProject={item=>openProjectPopup(item.id)}/>)}
             {roots.length===0&&<div style={{textAlign:"center",padding:"48px 0",color:C.muted}}><div style={{...serifI,fontSize:22,marginBottom:8}}>Nothing here yet.</div></div>}
             <button onClick={()=>setForm({item:{type:"project",subtasks:[],contexts:[]}})} style={{width:"100%",padding:"10px 0",background:"transparent",border:`1px dashed ${C.line2}`,borderRadius:10,fontSize:13,color:C.muted,cursor:"pointer",...sans,marginTop:4}}>+ New project</button>
           </div>
@@ -1149,13 +1156,13 @@ export default function Focus({userId}){
               {contexts.map(ctx=><button key={ctx.key} onClick={()=>toggleCtxFilter(ctx.key)} style={{padding:"3px 10px",fontSize:11,cursor:"pointer",...sans,border:`1px solid ${ctxFilter.includes(ctx.key)?C.ink:C.line}`,borderRadius:999,background:ctxFilter.includes(ctx.key)?C.bg2:"transparent",color:ctxFilter.includes(ctx.key)?C.ink2:C.muted}}>{ctx.label}</button>)}
               {ctxFilter.length>0&&<button onClick={()=>setCtxFilter([])} style={{padding:"3px 10px",fontSize:11,cursor:"pointer",...sans,border:`1px solid ${C.line}`,borderRadius:999,background:"transparent",color:C.muted}}>Clear</button>}
             </div>
-            {filteredActions.length===0?<div style={{textAlign:"center",padding:"48px 0",color:C.muted}}><div style={{...serifI,fontSize:22,marginBottom:8}}>{doFilter==="today"?"Nothing scheduled for today.":"No items found."}</div></div>:<div style={{display:"flex",flexDirection:"column",gap:6}}>{filteredActions.map(item=><ActionRow key={item.id} item={item} items={items} allContexts={contexts} onEdit={item=>setForm({item})} onToggleStatus={toggleStatus} onUpdate={updateTask} onJumpTo={jumpTo} allStatuses={statuses}/>)}</div>}
+            {filteredActions.length===0?<div style={{textAlign:"center",padding:"48px 0",color:C.muted}}><div style={{...serifI,fontSize:22,marginBottom:8}}>{doFilter==="today"?"Nothing scheduled for today.":"No items found."}</div></div>:<div style={{display:"flex",flexDirection:"column",gap:6}}>{filteredActions.map(item=><ActionRow key={item.id} item={item} items={visibleItems} allContexts={contexts} onEdit={item=>setForm({item})} onToggleStatus={toggleStatus} onUpdate={updateTask} onJumpTo={jumpTo} allStatuses={statuses}/>)}</div>}
           </div>
         )}
       </div>
 
       {settingsOpen&&<SettingsModal contexts={contexts} statuses={statuses} onUpdateContext={updateContext} onDeleteContext={deleteContext} onAddContext={addContext2} onUpdateStatus={updateStatus} onDeleteStatus={deleteStatus} onAddStatus={addStatus} onClose={()=>setSettingsOpen(false)}/>}
-      {projectPopup&&<ProjectPopup projectId={projectPopup} items={items} allContexts={contexts} allStatuses={statuses} onClose={()=>{setProjectPopup(null);setProjectPopupPath([]);}} onEdit={item=>{setForm({item});setProjectPopup(null);setProjectPopupPath([]);}} onAdd={pid=>setForm({item:{type:"task",parentId:pid,subtasks:[],contexts:[]}})} onDelete={deleteItem} onToggleSubtask={toggleSubtask} onEditDoDate={item=>setDoDateModal(item)} expanded={expanded} onToggleExpand={toggleExpand} onUpdate={updateTask} onJumpTo={jumpTo} projectPath={projectPopupPath} onOpenProject={id=>openProjectPopup(id)}/>}
+      {projectPopup&&<ProjectPopup projectId={projectPopup} items={visibleItems} allContexts={contexts} allStatuses={statuses} onClose={()=>{setProjectPopup(null);setProjectPopupPath([]);}} onEdit={item=>{setForm({item});setProjectPopup(null);setProjectPopupPath([]);}} onAdd={pid=>setForm({item:{type:"task",parentId:pid,subtasks:[],contexts:[]}})} onDelete={deleteItem} onToggleSubtask={toggleSubtask} onEditDoDate={item=>setDoDateModal(item)} expanded={expanded} onToggleExpand={toggleExpand} onUpdate={updateTask} onJumpTo={jumpTo} projectPath={projectPopupPath} onOpenProject={id=>openProjectPopup(id)}/>}
       {doDateModal&&<DoDateModal item={doDateModal} onSave={date=>saveDoDate(doDateModal,date)} onClose={()=>setDoDateModal(null)}/>}
       {form&&<ItemForm item={form.item} items={items} allContexts={contexts} allStatuses={statuses} onSave={saveItem} onClose={()=>setForm(null)} onAddContext={addContext}/>}
     </div>
