@@ -1162,6 +1162,7 @@ export default function Focus({userId}){
   const[ctxFilter,setCtxFilter]=useState([]);
   const[planStatusFilter,setPlanStatusFilter]=useState([]);
   const[planProjectSort,setPlanProjectSort]=useState("title");
+  const[planProjectCondensed,setPlanProjectCondensed]=useState(false);
   const[planTaskSort,setPlanTaskSort]=useState("priority");
   const[doDateModal,setDoDateModal]=useState(null);
   const[projectPopup,setProjectPopup]=useState(null);
@@ -1560,12 +1561,27 @@ export default function Focus({userId}){
                     }}>
                     {allPlanProjectsExpanded?"Collapse all":"Expand all"}
                   </button>
+                  <button
+                    onClick={()=>setPlanProjectCondensed(v=>!v)}
+                    style={{
+                      ...sans,
+                      fontSize:11,
+                      background:planProjectCondensed?C.bg2:"transparent",
+                      border:`1px solid ${planProjectCondensed?C.ink:C.line2}`,
+                      borderRadius:6,
+                      padding:"2px 8px",
+                      cursor:"pointer",
+                      color:planProjectCondensed?C.ink:C.ink2,
+                      marginLeft:4,
+                    }}>
+                    {planProjectCondensed?"Detailed":"Condensed"}
+                  </button>
                   <span style={{...mono,fontSize:10,color:C.muted,marginLeft:8}}>{planProjectCount}</span>
                 </div>
                 <div style={{flex:1,overflowY:"auto",padding:"10px 12px",display:"flex",flexDirection:"column",gap:6}}>
                   {projectRoots.length===0
                     ?<div style={{...serifI,fontSize:14,color:C.muted,textAlign:"center",padding:"20px 0"}}>No projects yet.</div>
-                    :projectRoots.map(item=><TreeItem key={item.id} item={item} items={filteredPlanItems} allContexts={contexts} allStatuses={statuses} depth={0} onEdit={item=>setForm({item})} onAdd={pid=>setForm({item:{type:"task",parentId:pid,subtasks:[],contexts:[]}})} onDelete={deleteItem} onToggleSubtask={toggleSubtask} expanded={expanded} onToggleExpand={toggleExpand} onEditDoDate={item=>setDoDateModal(item)} onUpdate={updateTask} onJumpTo={jumpTo} onOpenProject={item=>openProjectPopup(item.id)} sortMode={planProjectSort}/>)
+                    :projectRoots.map(item=><TreeItem key={item.id} item={item} items={filteredPlanItems} allContexts={contexts} allStatuses={statuses} depth={0} onEdit={item=>setForm({item})} onAdd={pid=>setForm({item:{type:"task",parentId:pid,subtasks:[],contexts:[]}})} onDelete={deleteItem} onToggleSubtask={toggleSubtask} expanded={expanded} onToggleExpand={toggleExpand} onEditDoDate={item=>setDoDateModal(item)} onUpdate={updateTask} onJumpTo={jumpTo} onOpenProject={item=>openProjectPopup(item.id)} sortMode={planProjectSort} condensed={planProjectCondensed}/>)
                   }
                 </div>
               </div>
