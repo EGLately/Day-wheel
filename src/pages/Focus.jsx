@@ -1150,6 +1150,52 @@ function SettingsModal({contexts,statuses,onUpdateContext,onDeleteContext,onAddC
   );
 }
 
+function HeaderMultiSelect({label,options,selectedKeys,onToggle,onClear}){
+  const [open,setOpen]=useState(false);
+  const popRef=useRef(null);
+
+  useEffect(()=>{
+    if(!open) return;
+    function onDocPointerDown(e){
+      if(!(e.target instanceof Element)) return;
+      if(popRef.current&&popRef.current.contains(e.target)) return;
+      setOpen(false);
+    }
+    document.addEventListener("mousedown",onDocPointerDown);
+    return()=>document.removeEventListener("mousedown",onDocPointerDown);
+  },[open]);
+
+  const activeCount=selectedKeys.length;
+
+  return(
+    <div ref={popRef} style={{position:"relative"}} data-pop="1">
+      <button onClick={()=>setOpen(v=>!v)} style={{...sans,fontSize:11,background:C.bg,border:`1px solid ${activeCount>0?C.ink:C.line}`,borderRadius:6,padding:"2px 6px",color:activeCount>0?C.ink:C.ink2,cursor:"pointer"}}>
+        {`${label}: ${activeCount>0?activeCount:"All"}`}
+      </button>
+      {open&&(
+        <div style={{position:"absolute",top:"calc(100% + 6px)",right:0,zIndex:40,minWidth:180,maxWidth:240,background:C.white,border:`1px solid ${C.line}`,borderRadius:10,boxShadow:"0 10px 24px rgba(0,0,0,.12)",padding:8,display:"flex",flexDirection:"column",gap:6}} data-pop="1">
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+            <span style={{...mono,fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:.8}}>{label}</span>
+            {activeCount>0&&<button onClick={onClear} style={{background:"transparent",border:"none",padding:0,cursor:"pointer",color:C.muted,...sans,fontSize:11}}>Clear</button>}
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:4,maxHeight:220,overflowY:"auto"}}>
+            {options.map(option=>{
+              const active=selectedKeys.includes(option.key);
+              return(
+                <button key={option.key} onClick={()=>onToggle(option.key)} style={{display:"flex",alignItems:"center",gap:8,width:"100%",textAlign:"left",background:active?C.bg2:"transparent",border:`1px solid ${active?C.ink:C.line}`,borderRadius:7,padding:"6px 8px",cursor:"pointer",color:active?C.ink:C.ink2,...sans,fontSize:12}}>
+                  <span style={{width:14,height:14,flexShrink:0,borderRadius:4,border:`1px solid ${active?C.ink:C.line2}`,background:active?C.ink:"transparent",display:"flex",alignItems:"center",justifyContent:"center",color:C.white,fontSize:9,lineHeight:1}}>{active?"✓":""}</span>
+                  {option.color&&<span style={{width:8,height:8,borderRadius:999,background:option.color,flexShrink:0}}/>}
+                  <span>{option.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Focus({userId}){
   const[items,setItems]=useState([]);
   const[contexts,setContexts]=useState(DEFAULT_CONTEXTS);
@@ -1160,10 +1206,14 @@ export default function Focus({userId}){
   const[expanded,setExpanded]=useState(()=>new Set(["m1","m2","m3","m4"]));
   const[doFilter,setDoFilter]=useState("today");
   const[ctxFilter,setCtxFilter]=useState([]);
-  const[planStatusFilter,setPlanStatusFilter]=useState([]);
   const[planProjectSort,setPlanProjectSort]=useState("title");
   const[planProjectCondensed,setPlanProjectCondensed]=useState(false);
+  const[planProjectStatusFilter,setPlanProjectStatusFilter]=useState([]);
+  const[planProjectContextFilter,setPlanProjectContextFilter]=useState([]);
   const[planTaskSort,setPlanTaskSort]=useState("priority");
+  const[planTaskCondensed,setPlanTaskCondensed]=useState(false);
+  const[planTaskStatusFilter,setPlanTaskStatusFilter]=useState([]);
+  const[planTaskContextFilter,setPlanTaskContextFilter]=useState([]);
   const[doDateModal,setDoDateModal]=useState(null);
   const[projectPopup,setProjectPopup]=useState(null);
   const[projectPopupPath,setProjectPopupPath]=useState([]);
@@ -1365,7 +1415,10 @@ export default function Focus({userId}){
   function toggleExpand(id){setExpanded(e=>{const n=new Set(e);n.has(id)?n.delete(id):n.add(id);return n;});}
   function addContext(ctx){setContexts(p=>p.find(x=>x.key===ctx.key)?p:[...p,ctx]);}
   function toggleCtxFilter(key){setCtxFilter(p=>p.includes(key)?p.filter(k=>k!==key):[...p,key]);}
-  function togglePlanStatusFilter(key){setPlanStatusFilter(p=>p.includes(key)?p.filter(k=>k!==key):[...p,key]);}
+  function togglePlanProjectStatusFilter(key){setPlanProjectStatusFilter(p=>p.includes(key)?p.filter(k=>k!==key):[...p,key]);}
+  function togglePlanProjectContextFilter(key){setPlanProjectContextFilter(p=>p.includes(key)?p.filter(k=>k!==key):[...p,key]);}
+  function togglePlanTaskStatusFilter(key){setPlanTaskStatusFilter(p=>p.includes(key)?p.filter(k=>k!==key):[...p,key]);}
+  function togglePlanTaskContextFilter(key){setPlanTaskContextFilter(p=>p.includes(key)?p.filter(k=>k!==key):[...p,key]);}
 
   const today=todayS();
   const weekEnd=new Date();weekEnd.setDate(weekEnd.getDate()+7);
@@ -1384,9 +1437,11 @@ export default function Focus({userId}){
   const planItems=visibleItems.filter(x=>!isInboxItem(x));
   const planItemById=new Map(planItems.map(item=>[item.id,item]));
   const standaloneTaskItems=planItems.filter(item=>item.type==="task"&&!isInProjectHierarchy(item,planItemById));
-  const filteredPlanItems=filterTreeByStatuses(planItems,planStatusFilter);
+  const projectContextFilteredItems=filterTreeByContexts(planItems,planProjectContextFilter);
+  const filteredPlanItems=filterTreeByStatuses(projectContextFilteredItems,planProjectStatusFilter);
   const projectRoots=sortItemsByMode(filteredPlanItems.filter(item=>item.type==="project"&&!item.parentId),planProjectSort,filteredPlanItems);
-  const filteredStandaloneTaskItems=filterTreeByStatuses(standaloneTaskItems,planStatusFilter);
+  const standaloneContextFilteredItems=filterTreeByContexts(standaloneTaskItems,planTaskContextFilter);
+  const filteredStandaloneTaskItems=filterTreeByStatuses(standaloneContextFilteredItems,planTaskStatusFilter);
   const filteredStandaloneTaskItemIds=new Set(filteredStandaloneTaskItems.map(item=>item.id));
   const standaloneTaskRoots=sortItemsByMode(filteredStandaloneTaskItems.filter(item=>!item.parentId||!filteredStandaloneTaskItemIds.has(item.parentId)),planTaskSort,filteredStandaloneTaskItems);
   const visiblePlanProjectIds=filteredPlanItems.filter(item=>item.type==="project").map(item=>item.id);
@@ -1529,10 +1584,6 @@ export default function Focus({userId}){
 
         {view==="plan"&&(
           <div style={{display:"flex",flexDirection:"column",gap:12}}>
-            <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
-              {statuses.map(status=><button key={status.key} onClick={()=>togglePlanStatusFilter(status.key)} style={{padding:"3px 10px",fontSize:11,cursor:"pointer",...sans,border:`1px solid ${planStatusFilter.includes(status.key)?`${status.color}55`:C.line}`,borderRadius:999,background:planStatusFilter.includes(status.key)?`${status.color}12`:"transparent",color:planStatusFilter.includes(status.key)?status.color:C.muted}}>{status.label}</button>)}
-              {planStatusFilter.length>0&&<button onClick={()=>setPlanStatusFilter([])} style={{padding:"3px 10px",fontSize:11,cursor:"pointer",...sans,border:`1px solid ${C.line}`,borderRadius:999,background:"transparent",color:C.muted}}>Clear</button>}
-            </div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(320px, 1fr))",gap:12,alignItems:"start"}}>
               <div style={{background:C.white,border:`1px solid ${C.line}`,borderRadius:12,display:"flex",flexDirection:"column",minHeight:220,overflow:"hidden"}}>
                 <div style={{padding:"14px 16px 12px",borderBottom:`1px solid ${C.line}`,display:"flex",alignItems:"center",gap:8}}>
@@ -1545,6 +1596,8 @@ export default function Focus({userId}){
                     <option value="doDate">Sort: Do date</option>
                     <option value="dueDate">Sort: Due date</option>
                   </select>
+                  <HeaderMultiSelect label="Status" options={statuses} selectedKeys={planProjectStatusFilter} onToggle={togglePlanProjectStatusFilter} onClear={()=>setPlanProjectStatusFilter([])}/>
+                  <HeaderMultiSelect label="Context" options={contexts} selectedKeys={planProjectContextFilter} onToggle={togglePlanProjectContextFilter} onClear={()=>setPlanProjectContextFilter([])}/>
                   <button
                     onClick={()=>setAllPlanProjectsExpanded(!allPlanProjectsExpanded)}
                     disabled={visiblePlanProjectIds.length===0}
@@ -1596,12 +1649,29 @@ export default function Focus({userId}){
                     <option value="doDate">Sort: Do date</option>
                     <option value="dueDate">Sort: Due date</option>
                   </select>
+                  <HeaderMultiSelect label="Status" options={statuses} selectedKeys={planTaskStatusFilter} onToggle={togglePlanTaskStatusFilter} onClear={()=>setPlanTaskStatusFilter([])}/>
+                  <HeaderMultiSelect label="Context" options={contexts} selectedKeys={planTaskContextFilter} onToggle={togglePlanTaskContextFilter} onClear={()=>setPlanTaskContextFilter([])}/>
+                  <button
+                    onClick={()=>setPlanTaskCondensed(v=>!v)}
+                    style={{
+                      ...sans,
+                      fontSize:11,
+                      background:planTaskCondensed?C.bg2:"transparent",
+                      border:`1px solid ${planTaskCondensed?C.ink:C.line2}`,
+                      borderRadius:6,
+                      padding:"2px 8px",
+                      cursor:"pointer",
+                      color:planTaskCondensed?C.ink:C.ink2,
+                      marginLeft:4,
+                    }}>
+                    {planTaskCondensed?"Detailed":"Condensed"}
+                  </button>
                   <span style={{...mono,fontSize:10,color:C.muted,marginLeft:8}}>{planTaskCount}</span>
                 </div>
                 <div style={{flex:1,overflowY:"auto",padding:"10px 12px",display:"flex",flexDirection:"column",gap:6}}>
                   {standaloneTaskRoots.length===0
                     ?<div style={{...serifI,fontSize:14,color:C.muted,textAlign:"center",padding:"20px 0"}}>No standalone tasks.</div>
-                    :standaloneTaskRoots.map(item=><TreeItem key={item.id} item={item} items={filteredStandaloneTaskItems} allContexts={contexts} allStatuses={statuses} depth={0} onEdit={item=>setForm({item})} onAdd={pid=>setForm({item:{type:"task",parentId:pid,subtasks:[],contexts:[]}})} onDelete={deleteItem} onToggleSubtask={toggleSubtask} expanded={expanded} onToggleExpand={toggleExpand} onEditDoDate={item=>setDoDateModal(item)} onUpdate={updateTask} onJumpTo={jumpTo} onOpenProject={item=>openProjectPopup(item.id)} sortMode={planTaskSort}/>)
+                    :standaloneTaskRoots.map(item=><TreeItem key={item.id} item={item} items={filteredStandaloneTaskItems} allContexts={contexts} allStatuses={statuses} depth={0} onEdit={item=>setForm({item})} onAdd={pid=>setForm({item:{type:"task",parentId:pid,subtasks:[],contexts:[]}})} onDelete={deleteItem} onToggleSubtask={toggleSubtask} expanded={expanded} onToggleExpand={toggleExpand} onEditDoDate={item=>setDoDateModal(item)} onUpdate={updateTask} onJumpTo={jumpTo} onOpenProject={item=>openProjectPopup(item.id)} sortMode={planTaskSort} condensed={planTaskCondensed}/>)
                   }
                 </div>
               </div>
