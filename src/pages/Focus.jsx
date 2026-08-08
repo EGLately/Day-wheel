@@ -550,7 +550,7 @@ function ItemForm({item,items,allContexts,allStatuses,onSave,onClose,onAddContex
   const containers=items.filter(x=>x.type==="project"&&x.id!==item.id);
   function toggleCtx(key){setContexts(p=>p.includes(key)?p.filter(k=>k!==key):[...p,key]);}
   function addCustomCtx(){if(!newCtxLabel.trim())return;const key=newCtxLabel.trim().toLowerCase().replace(/\s+/g,"-");onAddContext({key,label:newCtxLabel.trim(),color:"#8b8378"});setContexts(p=>[...p,key]);setNewCtxLabel("");}
-  function save(){if(!title.trim())return;const rec=type==="task"&&recurrence?{...recurrence,seriesId:recurrence.seriesId||item.id||nid()}:null;onSave({...item,id:item.id??nid(),type,title:title.trim(),description:desc.trim(),status,waitingFor:status==="waiting"?waitingFor:"",priority:priority||null,size:type==="task"?size:null,dueDate:dueDate||null,doDate:type==="task"?(doDate||null):null,parentId:parentId||null,contexts,subtasks:type==="task"?subtasks:[],recurrence:rec});}
+  function save(){if(!title.trim())return;const previousSeriesId=item.recurrence?.seriesId||null;const rec=type==="task"&&recurrence?{...recurrence,seriesId:recurrence.seriesId||previousSeriesId||item.id||nid()}:null;onSave({...item,id:item.id??nid(),type,title:title.trim(),description:desc.trim(),status,waitingFor:status==="waiting"?waitingFor:"",priority:priority||null,size:type==="task"?size:null,dueDate:dueDate||null,doDate:type==="task"?(doDate||null):null,parentId:parentId||null,contexts,subtasks:type==="task"?subtasks:[],recurrence:rec,previousSeriesId});}
   const segBtn=(val,set,opts)=><div style={{display:"flex",flexWrap:"wrap",gap:4}}>{opts.map(o=><button key={o.key} onClick={()=>set(o.key)} style={{padding:"4px 10px",fontSize:11,cursor:"pointer",...sans,border:`1px solid ${val===o.key?C.ink:C.line}`,borderRadius:6,background:val===o.key?C.ink:"transparent",color:val===o.key?C.white:C.muted}}>{o.label}</button>)}</div>;
   return(
     <div style={{position:"fixed",inset:0,zIndex:800,background:"rgba(0,0,0,0.35)",display:"flex",alignItems:"center",justifyContent:"center"}} onClick={e=>e.target===e.currentTarget&&onClose()}>
@@ -726,7 +726,7 @@ function ActionRow({item,items,allContexts,allStatuses,onEdit,onToggleStatus,onU
 }
 
 // ── TreeItem (Plan view) — now uses same card body as ActionRow ─────────────
-function TreeItem({item,items,allContexts,allStatuses,depth,onEdit,onAdd,onDelete,onToggleSubtask,expanded,onToggleExpand,onEditDoDate,onUpdate,onJumpTo,onOpenProject,sortMode,condensed=false,onCreateNestedTask}){
+function TreeItem({item,items,allContexts,allStatuses,depth,onEdit,onAdd,onDelete,onToggleSubtask,onToggleStatus,expanded,onToggleExpand,onEditDoDate,onUpdate,onJumpTo,onOpenProject,sortMode,condensed=false,onCreateNestedTask}){
   const children=getChildren(items,item.id);
   const isExpanded=expanded.has(item.id);
   const isProject=item.type==="project";
@@ -793,7 +793,7 @@ function TreeItem({item,items,allContexts,allStatuses,depth,onEdit,onAdd,onDelet
           )}
           {isExpanded&&children.length>0&&(
             <div style={{marginTop:2,display:"flex",flexDirection:"column",gap:2}}>
-              {sortItemsByMode(children,sortMode,items).map(child=><TreeItem key={child.id} item={child} items={items} allContexts={allContexts} allStatuses={allStatuses} depth={depth+1} onEdit={onEdit} onAdd={onAdd} onDelete={onDelete} onToggleSubtask={onToggleSubtask} expanded={expanded} onToggleExpand={onToggleExpand} onEditDoDate={onEditDoDate} onUpdate={onUpdate} onJumpTo={onJumpTo} onOpenProject={onOpenProject} sortMode={sortMode} condensed={condensed} onCreateNestedTask={onCreateNestedTask}/>) }
+              {sortItemsByMode(children,sortMode,items).map(child=><TreeItem key={child.id} item={child} items={items} allContexts={allContexts} allStatuses={allStatuses} depth={depth+1} onEdit={onEdit} onAdd={onAdd} onDelete={onDelete} onToggleSubtask={onToggleSubtask} onToggleStatus={onToggleStatus} expanded={expanded} onToggleExpand={onToggleExpand} onEditDoDate={onEditDoDate} onUpdate={onUpdate} onJumpTo={onJumpTo} onOpenProject={onOpenProject} sortMode={sortMode} condensed={condensed} onCreateNestedTask={onCreateNestedTask}/>) }
             </div>
           )}
         </div>
@@ -828,7 +828,7 @@ function TreeItem({item,items,allContexts,allStatuses,depth,onEdit,onAdd,onDelet
         )}
         {isExpanded&&children.length>0&&(
           <div style={{marginTop:2,display:"flex",flexDirection:"column",gap:2}}>
-            {sortItemsByMode(children,sortMode,items).map(child=><TreeItem key={child.id} item={child} items={items} allContexts={allContexts} allStatuses={allStatuses} depth={depth+1} onEdit={onEdit} onAdd={onAdd} onDelete={onDelete} onToggleSubtask={onToggleSubtask} expanded={expanded} onToggleExpand={onToggleExpand} onEditDoDate={onEditDoDate} onUpdate={onUpdate} onJumpTo={onJumpTo} onOpenProject={onOpenProject} sortMode={sortMode} condensed={condensed} onCreateNestedTask={onCreateNestedTask}/>) }
+            {sortItemsByMode(children,sortMode,items).map(child=><TreeItem key={child.id} item={child} items={items} allContexts={allContexts} allStatuses={allStatuses} depth={depth+1} onEdit={onEdit} onAdd={onAdd} onDelete={onDelete} onToggleSubtask={onToggleSubtask} onToggleStatus={onToggleStatus} expanded={expanded} onToggleExpand={onToggleExpand} onEditDoDate={onEditDoDate} onUpdate={onUpdate} onJumpTo={onJumpTo} onOpenProject={onOpenProject} sortMode={sortMode} condensed={condensed} onCreateNestedTask={onCreateNestedTask}/>) }
           </div>
         )}
       </div>
@@ -875,7 +875,7 @@ function TreeItem({item,items,allContexts,allStatuses,depth,onEdit,onAdd,onDelet
         </div>
         {isExpanded&&children.length>0&&(
           <div style={{marginTop:6,marginLeft:depth*18+18,display:"flex",flexDirection:"column",gap:6}}>
-            {sortItemsByMode(children,sortMode,items).map(child=><TreeItem key={child.id} item={child} items={items} allContexts={allContexts} allStatuses={allStatuses} depth={depth+1} onEdit={onEdit} onAdd={onAdd} onDelete={onDelete} onToggleSubtask={onToggleSubtask} expanded={expanded} onToggleExpand={onToggleExpand} onEditDoDate={onEditDoDate} onUpdate={onUpdate} onJumpTo={onJumpTo} onOpenProject={onOpenProject} sortMode={sortMode} condensed={condensed} onCreateNestedTask={onCreateNestedTask}/>) }
+            {sortItemsByMode(children,sortMode,items).map(child=><TreeItem key={child.id} item={child} items={items} allContexts={allContexts} allStatuses={allStatuses} depth={depth+1} onEdit={onEdit} onAdd={onAdd} onDelete={onDelete} onToggleSubtask={onToggleSubtask} onToggleStatus={onToggleStatus} expanded={expanded} onToggleExpand={onToggleExpand} onEditDoDate={onEditDoDate} onUpdate={onUpdate} onJumpTo={onJumpTo} onOpenProject={onOpenProject} sortMode={sortMode} condensed={condensed} onCreateNestedTask={onCreateNestedTask}/>) }
             <button onClick={()=>onAdd(item.id)} style={{display:"block",width:"100%",padding:"6px 0",background:"transparent",border:`1px dashed ${C.line2}`,borderRadius:6,fontSize:12,color:C.muted,cursor:"pointer",...sans,textAlign:"center"}}>+ Add inside {item.title}</button>
           </div>
         )}
@@ -889,7 +889,7 @@ function TreeItem({item,items,allContexts,allStatuses,depth,onEdit,onAdd,onDelet
   return(
     <div style={{marginLeft:depth*18}}>
       <div onMouseDownCapture={e=>{suppressOpenRef.current=shouldSuppressCardOpenFromInlineEdit(e);}} onClick={e=>{if(suppressOpenRef.current||shouldSuppressOpenAfterInlineEditBlur()){suppressOpenRef.current=false;return;}if(!shouldHandleCardOpenClick(e))return;onEdit&&onEdit(item);}} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 12px",background:item.linked?C.bg:C.white,border:`1px ${item.linked?"dashed":"solid"} ${C.line}`,borderLeft:`3px solid ${isDone?"#9abf8f":"#9aaac4"}`,borderRadius:10,opacity:isDone?0.6:item.linked?0.75:1,position:"relative",cursor:"pointer"}}>
-        <button onClick={(e)=>{e.stopPropagation();onToggleSubtask&&onUpdate&&onUpdate(item.id,{status:isDone?"actionable":"complete"});}} style={{width:18,height:18,borderRadius:4,flexShrink:0,marginTop:3,cursor:"pointer",padding:0,border:`2px solid ${isDone?C.green:C.line2}`,background:isDone?C.green:"transparent",display:"flex",alignItems:"center",justifyContent:"center"}}>{isDone&&<span style={{color:"#fff",fontSize:10}}>✓</span>}</button>
+        <button onClick={(e)=>{e.stopPropagation();if(onToggleStatus){onToggleStatus(item.id);}else if(onUpdate){onUpdate(item.id,{status:isDone?"actionable":"complete"});}}} style={{width:18,height:18,borderRadius:4,flexShrink:0,marginTop:3,cursor:"pointer",padding:0,border:`2px solid ${isDone?C.green:C.line2}`,background:isDone?C.green:"transparent",display:"flex",alignItems:"center",justifyContent:"center"}}>{isDone&&<span style={{color:"#fff",fontSize:10}}>✓</span>}</button>
         <TaskCardBody item={item} allContexts={allContexts} allStatuses={allStatuses} onEdit={onEdit} onUpdate={onUpdate} onJumpTo={onJumpTo} parent={parent} grandparent={grandparent} onToggleSubtask={onToggleSubtask}/>
         <div style={{display:"flex",gap:3,flexShrink:0,marginTop:2}}>
           <button onClick={(e)=>{e.stopPropagation();onAdd(item.id);}} style={{background:"transparent",border:`1px solid ${C.line}`,color:C.muted,borderRadius:6,padding:"2px 7px",fontSize:12,cursor:"pointer"}}>+</button>
@@ -898,7 +898,7 @@ function TreeItem({item,items,allContexts,allStatuses,depth,onEdit,onAdd,onDelet
       </div>
       {isExpanded&&children.length>0&&(
         <div style={{marginTop:6,marginLeft:18,display:"flex",flexDirection:"column",gap:6}}>
-          {sortItemsByMode(children,sortMode,items).map(child=><TreeItem key={child.id} item={child} items={items} allContexts={allContexts} allStatuses={allStatuses} depth={depth+1} onEdit={onEdit} onAdd={onAdd} onDelete={onDelete} onToggleSubtask={onToggleSubtask} expanded={expanded} onToggleExpand={onToggleExpand} onEditDoDate={onEditDoDate} onUpdate={onUpdate} onJumpTo={onJumpTo} onOpenProject={onOpenProject} sortMode={sortMode} condensed={condensed} onCreateNestedTask={onCreateNestedTask}/>) }
+          {sortItemsByMode(children,sortMode,items).map(child=><TreeItem key={child.id} item={child} items={items} allContexts={allContexts} allStatuses={allStatuses} depth={depth+1} onEdit={onEdit} onAdd={onAdd} onDelete={onDelete} onToggleSubtask={onToggleSubtask} onToggleStatus={onToggleStatus} expanded={expanded} onToggleExpand={onToggleExpand} onEditDoDate={onEditDoDate} onUpdate={onUpdate} onJumpTo={onJumpTo} onOpenProject={onOpenProject} sortMode={sortMode} condensed={condensed} onCreateNestedTask={onCreateNestedTask}/>) }
         </div>
       )}
     </div>
@@ -919,7 +919,7 @@ function DoDateModal({item,onSave,onClose}){
   );
 }
 
-function ProjectPopup({projectId,items,allContexts,allStatuses,onClose,onEdit,onAdd,onDelete,onToggleSubtask,onEditDoDate,expanded,onToggleExpand,onUpdate,onJumpTo,projectPath,onOpenProject,onCreateTask}){
+function ProjectPopup({projectId,items,allContexts,allStatuses,onClose,onEdit,onAdd,onDelete,onToggleSubtask,onToggleStatus,onEditDoDate,expanded,onToggleExpand,onUpdate,onJumpTo,projectPath,onOpenProject,onCreateTask}){
   const [inlineOpen,setInlineOpen]=useState(false);
   const [inlineTitle,setInlineTitle]=useState("");
   const [inlineDescription,setInlineDescription]=useState("");
@@ -1048,7 +1048,7 @@ function ProjectPopup({projectId,items,allContexts,allStatuses,onClose,onEdit,on
           </div>
         </div>
         <div style={{flex:1,overflowY:"auto",padding:"14px 20px",display:"flex",flexDirection:"column",gap:6}}>
-          {getChildren(items,projectId).map(child=><TreeItem key={child.id} item={child} items={items} allContexts={allContexts} allStatuses={allStatuses} depth={0} onEdit={onEdit} onAdd={onAdd} onDelete={onDelete} onToggleSubtask={onToggleSubtask} expanded={popupExpanded} onToggleExpand={togglePopupExpand} onEditDoDate={onEditDoDate} onUpdate={onUpdate} onJumpTo={onJumpTo} onOpenProject={item=>onOpenProject?.(item.id)} condensed={isCondensedView} onCreateNestedTask={onCreateTask}/>) }
+          {getChildren(items,projectId).map(child=><TreeItem key={child.id} item={child} items={items} allContexts={allContexts} allStatuses={allStatuses} depth={0} onEdit={onEdit} onAdd={onAdd} onDelete={onDelete} onToggleSubtask={onToggleSubtask} onToggleStatus={onToggleStatus} expanded={popupExpanded} onToggleExpand={togglePopupExpand} onEditDoDate={onEditDoDate} onUpdate={onUpdate} onJumpTo={onJumpTo} onOpenProject={item=>onOpenProject?.(item.id)} condensed={isCondensedView} onCreateNestedTask={onCreateTask}/>) }
           {!inlineOpen&&<button onClick={()=>setInlineOpen(true)} style={{width:"100%",padding:"8px 0",marginTop:4,background:"transparent",border:`1px dashed ${C.line2}`,borderRadius:8,fontSize:12,color:C.muted,cursor:"pointer",...sans}}>+ Add task</button>}
           {inlineOpen&&(
             <div style={{marginTop:4,border:`1px solid ${C.line}`,borderRadius:10,padding:12,display:"flex",flexDirection:"column",gap:8,background:C.bg}}>
@@ -1370,8 +1370,31 @@ export default function Focus({userId}){
         }
       }
 
-      if(additions.length===0&&result.length===prev.length)return prev;
-      return [...result,...additions];
+      // For completion-based series, keep the first open item as the real next task.
+      // Any additional open items remain linked projections.
+      let normalized=[...result,...additions];
+      const completionSeriesIds=[...new Set(normalized
+        .filter(x=>x.recurrence&&x.recurrence.trigger==="completion"&&x.recurrence.seriesId)
+        .map(x=>x.recurrence.seriesId))];
+
+      let adjusted=false;
+      for(const seriesId of completionSeriesIds){
+        const openSeriesItems=normalized
+          .filter(x=>x.recurrence?.seriesId===seriesId&&x.status!=="complete")
+          .sort((a,b)=>(a.doDate||"9999-12-31").localeCompare(b.doDate||"9999-12-31")||(a.id||"").localeCompare(b.id||""));
+        if(openSeriesItems.length===0)continue;
+        const firstOpenId=openSeriesItems[0].id;
+        normalized=normalized.map(x=>{
+          if(x.recurrence?.seriesId!==seriesId||x.status==="complete")return x;
+          const shouldBeLinked=x.id!==firstOpenId;
+          if(!!x.linked===shouldBeLinked)return x;
+          adjusted=true;
+          return {...x,linked:shouldBeLinked};
+        });
+      }
+
+      if(additions.length===0&&!adjusted&&result.length===prev.length)return prev;
+      return normalized;
     });
   }
 
@@ -1423,7 +1446,28 @@ export default function Focus({userId}){
   }
   function jumpTo(id){let item=items.find(x=>x.id===id);while(item?.parentId){item=items.find(x=>x.id===item.parentId);}if(item)openProjectPopup(item.id);}
   function saveDoDate(item,date){setItems(p=>p.map(x=>x.id===item.id?{...x,doDate:date}:x));shiftLinkedDescendants({...item,doDate:date},item.doDate,item.dueDate);setDoDateModal(null);}
-  function saveItem(item){setItems(p=>p.find(x=>x.id===item.id)?p.map(x=>x.id===item.id?item:x):[...p,item]);if(item.parentId)setExpanded(e=>{const n=new Set(e);n.add(item.parentId);return n;});setForm(null);if(item.recurrence&&(item.recurrence.trigger==="fixed"||item.recurrence.trigger==="completion")){maintainRecurrenceWindows();}}
+  function saveItem(item){
+    const before=items.find(x=>x.id===item.id);
+    const previousSeriesId=before?.recurrence?.seriesId || item.previousSeriesId || null;
+    const normalizedItem={
+      ...item,
+      recurrence: item.type==="task" && item.recurrence
+        ? {...item.recurrence, seriesId: item.recurrence.seriesId || previousSeriesId || item.id || nid()}
+        : null,
+    };
+    setItems(prev=>{
+      const updated=prev.find(x=>x.id===normalizedItem.id)
+        ? prev.map(x=>x.id===normalizedItem.id?normalizedItem:x)
+        : [...prev,normalizedItem];
+      if(normalizedItem.type==="task" && !normalizedItem.recurrence && previousSeriesId){
+        return updated.map(x=>x.recurrence?.seriesId===previousSeriesId?{...x,recurrence:null,linked:false}:x);
+      }
+      return updated;
+    });
+    if(normalizedItem.parentId)setExpanded(e=>{const n=new Set(e);n.add(normalizedItem.parentId);return n;});
+    setForm(null);
+    if(normalizedItem.recurrence&&(normalizedItem.recurrence.trigger==="fixed"||normalizedItem.recurrence.trigger==="completion")){maintainRecurrenceWindows();}
+  }
   function deleteItem(id){if(!confirm("Delete this and all children?"))return;const d=new Set([id,...getDescendants(items,id).map(x=>x.id)]);setItems(p=>p.filter(x=>!d.has(x.id)));}
   function toggleSubtask(iid,sid){setItems(p=>p.map(x=>x.id!==iid?x:{...x,subtasks:x.subtasks.map(s=>s.id===sid?{...s,done:!s.done}:s)}));}
   function updateTask(id,patch){
@@ -1682,7 +1726,7 @@ export default function Focus({userId}){
                 <div style={{flex:1,overflowY:"auto",padding:"10px 12px",display:"flex",flexDirection:"column",gap:6}}>
                   {projectRoots.length===0
                     ?<div style={{...serifI,fontSize:14,color:C.muted,textAlign:"center",padding:"20px 0"}}>No projects yet.</div>
-                    :projectRoots.map(item=><TreeItem key={item.id} item={item} items={filteredPlanItems} allContexts={contexts} allStatuses={statuses} depth={0} onEdit={item=>setForm({item})} onAdd={pid=>setForm({item:{type:"task",parentId:pid,subtasks:[],contexts:[]}})} onDelete={deleteItem} onToggleSubtask={toggleSubtask} expanded={expanded} onToggleExpand={toggleExpand} onEditDoDate={item=>setDoDateModal(item)} onUpdate={updateTask} onJumpTo={jumpTo} onOpenProject={item=>openProjectPopup(item.id)} sortMode={planProjectSort} condensed={planProjectCondensed}/>)
+                    :projectRoots.map(item=><TreeItem key={item.id} item={item} items={filteredPlanItems} allContexts={contexts} allStatuses={statuses} depth={0} onEdit={item=>setForm({item})} onAdd={pid=>setForm({item:{type:"task",parentId:pid,subtasks:[],contexts:[]}})} onDelete={deleteItem} onToggleSubtask={toggleSubtask} onToggleStatus={toggleStatus} expanded={expanded} onToggleExpand={toggleExpand} onEditDoDate={item=>setDoDateModal(item)} onUpdate={updateTask} onJumpTo={jumpTo} onOpenProject={item=>openProjectPopup(item.id)} sortMode={planProjectSort} condensed={planProjectCondensed}/>)
                   }
                 </div>
               </div>
@@ -1719,7 +1763,7 @@ export default function Focus({userId}){
                 <div style={{flex:1,overflowY:"auto",padding:"10px 12px",display:"flex",flexDirection:"column",gap:6}}>
                   {standaloneTaskRoots.length===0
                     ?<div style={{...serifI,fontSize:14,color:C.muted,textAlign:"center",padding:"20px 0"}}>No standalone tasks.</div>
-                    :standaloneTaskRoots.map(item=><TreeItem key={item.id} item={item} items={filteredStandaloneTaskItems} allContexts={contexts} allStatuses={statuses} depth={0} onEdit={item=>setForm({item})} onAdd={pid=>setForm({item:{type:"task",parentId:pid,subtasks:[],contexts:[]}})} onDelete={deleteItem} onToggleSubtask={toggleSubtask} expanded={expanded} onToggleExpand={toggleExpand} onEditDoDate={item=>setDoDateModal(item)} onUpdate={updateTask} onJumpTo={jumpTo} onOpenProject={item=>openProjectPopup(item.id)} sortMode={planTaskSort} condensed={planTaskCondensed}/>)
+                    :standaloneTaskRoots.map(item=><TreeItem key={item.id} item={item} items={filteredStandaloneTaskItems} allContexts={contexts} allStatuses={statuses} depth={0} onEdit={item=>setForm({item})} onAdd={pid=>setForm({item:{type:"task",parentId:pid,subtasks:[],contexts:[]}})} onDelete={deleteItem} onToggleSubtask={toggleSubtask} onToggleStatus={toggleStatus} expanded={expanded} onToggleExpand={toggleExpand} onEditDoDate={item=>setDoDateModal(item)} onUpdate={updateTask} onJumpTo={jumpTo} onOpenProject={item=>openProjectPopup(item.id)} sortMode={planTaskSort} condensed={planTaskCondensed}/>)
                   }
                 </div>
               </div>
@@ -1742,7 +1786,7 @@ export default function Focus({userId}){
       </div>
 
       {settingsOpen&&<SettingsModal contexts={contexts} statuses={statuses} onUpdateContext={updateContext} onDeleteContext={deleteContext} onAddContext={addContext2} onUpdateStatus={updateStatus} onDeleteStatus={deleteStatus} onAddStatus={addStatus} onClose={()=>setSettingsOpen(false)}/>}
-      {projectPopup&&<ProjectPopup projectId={projectPopup} items={visibleItems} allContexts={contexts} allStatuses={statuses} onClose={()=>{setProjectPopup(null);setProjectPopupPath([]);}} onEdit={item=>{setForm({item});setProjectPopup(null);setProjectPopupPath([]);}} onAdd={pid=>setForm({item:{type:"task",parentId:pid,subtasks:[],contexts:[]}})} onDelete={deleteItem} onToggleSubtask={toggleSubtask} onEditDoDate={item=>setDoDateModal(item)} expanded={expanded} onToggleExpand={toggleExpand} onUpdate={updateTask} onJumpTo={jumpTo} projectPath={projectPopupPath} onOpenProject={id=>openProjectPopup(id)} onCreateTask={saveItem}/>} 
+      {projectPopup&&<ProjectPopup projectId={projectPopup} items={visibleItems} allContexts={contexts} allStatuses={statuses} onClose={()=>{setProjectPopup(null);setProjectPopupPath([]);}} onEdit={item=>{setForm({item});setProjectPopup(null);setProjectPopupPath([]);}} onAdd={pid=>setForm({item:{type:"task",parentId:pid,subtasks:[],contexts:[]}})} onDelete={deleteItem} onToggleSubtask={toggleSubtask} onToggleStatus={toggleStatus} onEditDoDate={item=>setDoDateModal(item)} expanded={expanded} onToggleExpand={toggleExpand} onUpdate={updateTask} onJumpTo={jumpTo} projectPath={projectPopupPath} onOpenProject={id=>openProjectPopup(id)} onCreateTask={saveItem}/>} 
       {doDateModal&&<DoDateModal item={doDateModal} onSave={date=>saveDoDate(doDateModal,date)} onClose={()=>setDoDateModal(null)}/>}
       {form&&<ItemForm item={form.item} items={items} allContexts={contexts} allStatuses={statuses} onSave={saveItem} onClose={()=>setForm(null)} onAddContext={addContext}/>}
     </div>
