@@ -693,6 +693,9 @@ function TreeItem({item,items,allContexts,allStatuses,depth,onEdit,onAdd,onDelet
   function submitCondensedNestedTask(){
     const title=(condensedAddTitle||"").trim();
     if(!title)return;
+    if(!isExpanded&&onToggleExpand){
+      onToggleExpand(item.id);
+    }
     if(onCreateNestedTask){
       onCreateNestedTask({
         id:nid(),
@@ -722,8 +725,9 @@ function TreeItem({item,items,allContexts,allStatuses,depth,onEdit,onAdd,onDelet
         <div>
           <div onClick={()=>onOpenProject?.(item)} style={{display:"flex",alignItems:"center",gap:6,padding:"4px 2px",marginLeft:depth*18,cursor:"pointer"}}>
             <button onClick={(e)=>{e.stopPropagation();children.length&&onToggleExpand(item.id);}} style={{width:16,height:16,flexShrink:0,fontSize:11,color:C.muted,background:"transparent",border:"none",cursor:children.length?"pointer":"default",padding:0,display:"flex",alignItems:"center",justifyContent:"center"}}>{children.length?(isExpanded?"▾":"▸"):"◈"}</button>
+            <span style={{...mono,fontSize:10,color:C.muted,lineHeight:1}}>◈</span>
             <span style={{...serif,fontSize:14,color:C.ink,lineHeight:1.2}}>{item.title}</span>
-            <button onClick={(e)=>{e.stopPropagation();setCondensedAddOpen(v=>!v);}} style={{marginLeft:"auto",background:"transparent",border:`1px solid ${C.line}`,color:C.muted,borderRadius:6,padding:"1px 6px",fontSize:11,cursor:"pointer"}}>+</button>
+            <button onClick={(e)=>{e.stopPropagation();setCondensedAddOpen(v=>!v);}} style={{background:"transparent",border:`1px solid ${C.line}`,color:C.muted,borderRadius:6,padding:"1px 6px",fontSize:11,cursor:"pointer"}}>+</button>
           </div>
           {condensedAddOpen&&(
             <div style={{marginLeft:depth*18+22,marginTop:2,display:"flex",gap:6,alignItems:"center"}}>
@@ -753,7 +757,7 @@ function TreeItem({item,items,allContexts,allStatuses,depth,onEdit,onAdd,onDelet
         <div onClick={()=>onEdit&&onEdit(item)} style={{display:"flex",alignItems:"center",gap:6,padding:"4px 2px",cursor:"pointer",opacity:isDone?0.55:1}}>
           <button onClick={(e)=>{e.stopPropagation();children.length&&onToggleExpand(item.id);}} style={{width:16,height:16,flexShrink:0,fontSize:11,color:C.muted,background:"transparent",border:"none",cursor:children.length?"pointer":"default",padding:0,display:"flex",alignItems:"center",justifyContent:"center"}}>{children.length?(isExpanded?"▾":"▸"):"•"}</button>
           <span style={{...serif,fontSize:14,color:C.ink,lineHeight:1.2}}>{item.title}</span>
-          <button onClick={(e)=>{e.stopPropagation();setCondensedAddOpen(v=>!v);}} style={{marginLeft:"auto",background:"transparent",border:`1px solid ${C.line}`,color:C.muted,borderRadius:6,padding:"1px 6px",fontSize:11,cursor:"pointer"}}>+</button>
+          <button onClick={(e)=>{e.stopPropagation();setCondensedAddOpen(v=>!v);}} style={{background:"transparent",border:`1px solid ${C.line}`,color:C.muted,borderRadius:6,padding:"1px 6px",fontSize:11,cursor:"pointer"}}>+</button>
         </div>
         {condensedAddOpen&&(
           <div style={{marginLeft:16,marginTop:1,display:"flex",gap:6,alignItems:"center"}}>
