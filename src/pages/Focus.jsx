@@ -90,6 +90,54 @@ function todayS() { const d=new Date(); return `${d.getFullYear()}-${String(d.ge
 function isOnOrBeforeToday(date){ return !!date && date <= todayS(); }
 function fmtDate(d) { if(!d)return null; const[y,m,day]=d.split("-"); return `${parseInt(m)}/${parseInt(day)}/${y.slice(2)}`; }
 
+function renderLinkedText(text, textStyle) {
+  if (!text) return null;
+
+  const urlPattern = /(https?:\/\/[^\s<]+|www\.[^\s<]+)/gi;
+  const parts = [];
+  let lastIndex = 0;
+  let match;
+
+  while ((match = urlPattern.exec(text)) !== null) {
+    const rawUrl = match[0];
+    const start = match.index;
+    const end = start + rawUrl.length;
+
+    if (start > lastIndex) {
+      parts.push(<span key={`text-${lastIndex}`}>{text.slice(lastIndex, start)}</span>);
+    }
+
+    const trimmedUrl = rawUrl.replace(/[),.?!:;]+$/u, "");
+    const trailing = rawUrl.slice(trimmedUrl.length);
+    const href = trimmedUrl.startsWith("www.") ? `https://${trimmedUrl}` : trimmedUrl;
+
+    parts.push(
+      <a
+        key={`link-${start}`}
+        href={href}
+        target="_blank"
+        rel="noreferrer"
+        style={{ color:C.accent, textDecoration:"underline", ...textStyle }}
+        onClick={e=>e.stopPropagation()}
+      >
+        {trimmedUrl}
+      </a>
+    );
+
+    if (trailing) {
+      parts.push(<span key={`trail-${start}`}>{trailing}</span>);
+    }
+
+    lastIndex = end;
+  }
+
+  if (lastIndex < text.length) {
+    parts.push(<span key={`text-${lastIndex}`}>{text.slice(lastIndex)}</span>);
+  }
+
+  return parts.length > 0 ? parts : text;
+}
+
 // ── Recurrence engine ──────────────────────────────────────────────────────────
 const WEEKDAY_NAMES=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 const WEEKDAY_SHORT=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
@@ -804,7 +852,7 @@ function TreeItem({item,items,allContexts,allStatuses,depth,onEdit,onAdd,onDelet
 
             {/* Row 2+3: description as "breadcrumb" analog + do/due dates */}
             <div style={{paddingLeft:18,marginTop:1}}>
-              {item.description&&<div style={{...mono,fontSize:9,color:C.muted,lineHeight:1.4,marginBottom:3}}>{item.description}</div>}
+              {item.description&&<div style={{...mono,fontSize:9,color:C.muted,lineHeight:1.4,marginBottom:3,whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{renderLinkedText(item.description, { color:C.muted })}</div>}
               <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:3}}>
                 <button onClick={(e)=>{e.stopPropagation();onEditDoDate(item);}} style={{...mono,fontSize:10,cursor:"pointer",background:"transparent",border:"none",padding:0,color:C.muted,lineHeight:1}}>{item.doDate?`do ${fmtDate(item.doDate)}`:rolledDo?`do↑ ${fmtDate(rolledDo)}`:"set do"}</button>
                 <span style={{color:C.line2,fontSize:10,lineHeight:1}}>·</span>
@@ -979,7 +1027,7 @@ function ProjectPopup({projectId,items,allContexts,allStatuses,onClose,onEdit,on
                 </div>
               )}
               <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}><span style={{fontSize:14,color:C.muted}}>◈</span><div style={{...serif,fontSize:22,color:C.ink,lineHeight:1.2}}>{project.title}</div></div>
-              {project.description&&<div style={{...sans,fontSize:13,color:C.muted,marginTop:4,lineHeight:1.5}}>{project.description}</div>}
+              {project.description&&<div style={{...sans,fontSize:13,color:C.muted,marginTop:4,lineHeight:1.5,whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{renderLinkedText(project.description, { color:C.muted })}</div>}
               <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:8,alignItems:"center"}}>
                 <StatusBadge status={project.status} waitingFor={project.waitingFor} allStatuses={allStatuses}/>
               </div>
