@@ -505,7 +505,7 @@ function ItemForm({item,items,allContexts,allStatuses,onSave,onClose,onAddContex
   function save(){if(!title.trim())return;const rec=type==="task"&&recurrence?{...recurrence,seriesId:recurrence.seriesId||item.id||nid()}:null;onSave({...item,id:item.id??nid(),type,title:title.trim(),description:desc.trim(),status,waitingFor:status==="waiting"?waitingFor:"",priority:priority||null,size:type==="task"?size:null,dueDate:dueDate||null,doDate:type==="task"?(doDate||null):null,parentId:parentId||null,contexts,subtasks:type==="task"?subtasks:[],recurrence:rec});}
   const segBtn=(val,set,opts)=><div style={{display:"flex",flexWrap:"wrap",gap:4}}>{opts.map(o=><button key={o.key} onClick={()=>set(o.key)} style={{padding:"4px 10px",fontSize:11,cursor:"pointer",...sans,border:`1px solid ${val===o.key?C.ink:C.line}`,borderRadius:6,background:val===o.key?C.ink:"transparent",color:val===o.key?C.white:C.muted}}>{o.label}</button>)}</div>;
   return(
-    <div style={{position:"fixed",inset:0,zIndex:500,background:"rgba(0,0,0,0.35)",display:"flex",alignItems:"center",justifyContent:"center"}} onClick={e=>e.target===e.currentTarget&&onClose()}>
+    <div style={{position:"fixed",inset:0,zIndex:800,background:"rgba(0,0,0,0.35)",display:"flex",alignItems:"center",justifyContent:"center"}} onClick={e=>e.target===e.currentTarget&&onClose()}>
       <div style={{background:C.white,border:`1px solid ${C.line}`,borderRadius:16,padding:28,width:480,maxWidth:"95vw",maxHeight:"90vh",overflowY:"auto",boxShadow:"0 16px 48px rgba(0,0,0,.18)",display:"flex",flexDirection:"column",gap:14}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><div style={{...serifI,fontSize:24,color:C.ink}}>{isNew?"New item":"Edit item"}</div><button onClick={onClose} style={{background:"none",border:"none",color:C.muted,fontSize:22,cursor:"pointer"}}>×</button></div>
         <div style={{display:"flex",gap:10,alignItems:"center"}}><div style={{...mono,fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:1,width:64}}>Type</div>{segBtn(type,setType,[{key:"project",label:"◈ Project"},{key:"task",label:"○ Task"}])}</div>
@@ -678,7 +678,7 @@ function ActionRow({item,items,allContexts,allStatuses,onEdit,onToggleStatus,onU
 }
 
 // ── TreeItem (Plan view) — now uses same card body as ActionRow ─────────────
-function TreeItem({item,items,allContexts,allStatuses,depth,onEdit,onAdd,onDelete,onToggleSubtask,expanded,onToggleExpand,onEditDoDate,onUpdate,onJumpTo,onOpenProject,sortMode}){
+function TreeItem({item,items,allContexts,allStatuses,depth,onEdit,onAdd,onDelete,onToggleSubtask,expanded,onToggleExpand,onEditDoDate,onUpdate,onJumpTo,onOpenProject,sortMode,condensed=false,onCreateNestedTask}){
   const children=getChildren(items,item.id);
   const isExpanded=expanded.has(item.id);
   const isProject=item.type==="project";
@@ -687,6 +687,101 @@ function TreeItem({item,items,allContexts,allStatuses,depth,onEdit,onAdd,onDelet
   const rolledDo=isProject?rollupDoDate(items,item.id):null;
   const projectPriority=isProject?PRIORITIES.find(p=>p.key===item.priority):null;
   const suppressOpenRef=useRef(false);
+  const [condensedAddOpen,setCondensedAddOpen]=useState(false);
+  const [condensedAddTitle,setCondensedAddTitle]=useState("");
+
+  function submitCondensedNestedTask(){
+    const title=(condensedAddTitle||"").trim();
+    if(!title)return;
+    if(onCreateNestedTask){
+      onCreateNestedTask({
+        id:nid(),
+        type:"task",
+        title,
+        description:"",
+        status:"actionable",
+        contexts:[],
+        parentId:item.id,
+        dueDate:null,
+        doDate:null,
+        priority:null,
+        size:"small",
+        waitingFor:"",
+        subtasks:[],
+      });
+    } else {
+      onAdd(item.id);
+    }
+    setCondensedAddTitle("");
+    setCondensedAddOpen(false);
+  }
+
+  if(condensed){
+    if(isProject){
+      return(
+        <div>
+          <div onClick={()=>onOpenProject?.(item)} style={{display:"flex",alignItems:"center",gap:6,padding:"4px 2px",marginLeft:depth*18,cursor:"pointer"}}>
+            <button onClick={(e)=>{e.stopPropagation();children.length&&onToggleExpand(item.id);}} style={{width:16,height:16,flexShrink:0,fontSize:11,color:C.muted,background:"transparent",border:"none",cursor:children.length?"pointer":"default",padding:0,display:"flex",alignItems:"center",justifyContent:"center"}}>{children.length?(isExpanded?"▾":"▸"):"◈"}</button>
+            <span style={{...serif,fontSize:14,color:C.ink,lineHeight:1.2}}>{item.title}</span>
+            <button onClick={(e)=>{e.stopPropagation();setCondensedAddOpen(v=>!v);}} style={{marginLeft:"auto",background:"transparent",border:`1px solid ${C.line}`,color:C.muted,borderRadius:6,padding:"1px 6px",fontSize:11,cursor:"pointer"}}>+</button>
+          </div>
+          {condensedAddOpen&&(
+            <div style={{marginLeft:depth*18+22,marginTop:2,display:"flex",gap:6,alignItems:"center"}}>
+              <input
+                autoFocus
+                value={condensedAddTitle}
+                onChange={e=>setCondensedAddTitle(e.target.value)}
+                onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();submitCondensedNestedTask();} if(e.key==="Escape"){setCondensedAddOpen(false);setCondensedAddTitle("");}}}
+                placeholder="New nested task"
+                style={{...sans,fontSize:12,color:C.ink,background:C.white,border:`1px solid ${C.line}`,borderRadius:6,padding:"4px 8px",outline:"none",width:220,maxWidth:"100%"}}
+              />
+              <button onClick={submitCondensedNestedTask} disabled={!condensedAddTitle.trim()} style={{...sans,fontSize:11,background:condensedAddTitle.trim()?C.ink:C.line2,color:C.white,border:"none",borderRadius:6,padding:"4px 8px",cursor:condensedAddTitle.trim()?"pointer":"default"}}>Add</button>
+              <button onClick={()=>{setCondensedAddOpen(false);setCondensedAddTitle("");}} style={{...sans,fontSize:11,background:"transparent",border:`1px solid ${C.line}`,borderRadius:6,padding:"4px 8px",cursor:"pointer",color:C.muted}}>Cancel</button>
+            </div>
+          )}
+          {isExpanded&&children.length>0&&(
+            <div style={{marginTop:2,display:"flex",flexDirection:"column",gap:2}}>
+              {sortItemsByMode(children,sortMode,items).map(child=><TreeItem key={child.id} item={child} items={items} allContexts={allContexts} allStatuses={allStatuses} depth={depth+1} onEdit={onEdit} onAdd={onAdd} onDelete={onDelete} onToggleSubtask={onToggleSubtask} expanded={expanded} onToggleExpand={onToggleExpand} onEditDoDate={onEditDoDate} onUpdate={onUpdate} onJumpTo={onJumpTo} onOpenProject={onOpenProject} sortMode={sortMode} condensed={condensed} onCreateNestedTask={onCreateNestedTask}/>) }
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    return(
+      <div style={{marginLeft:depth*18,display:"flex",flexDirection:"column",gap:2}}>
+        <div onClick={()=>onEdit&&onEdit(item)} style={{display:"flex",alignItems:"center",gap:6,padding:"4px 2px",cursor:"pointer",opacity:isDone?0.55:1}}>
+          <button onClick={(e)=>{e.stopPropagation();children.length&&onToggleExpand(item.id);}} style={{width:16,height:16,flexShrink:0,fontSize:11,color:C.muted,background:"transparent",border:"none",cursor:children.length?"pointer":"default",padding:0,display:"flex",alignItems:"center",justifyContent:"center"}}>{children.length?(isExpanded?"▾":"▸"):"•"}</button>
+          <span style={{...serif,fontSize:14,color:C.ink,lineHeight:1.2}}>{item.title}</span>
+          <button onClick={(e)=>{e.stopPropagation();setCondensedAddOpen(v=>!v);}} style={{marginLeft:"auto",background:"transparent",border:`1px solid ${C.line}`,color:C.muted,borderRadius:6,padding:"1px 6px",fontSize:11,cursor:"pointer"}}>+</button>
+        </div>
+        {condensedAddOpen&&(
+          <div style={{marginLeft:16,marginTop:1,display:"flex",gap:6,alignItems:"center"}}>
+            <input
+              autoFocus
+              value={condensedAddTitle}
+              onChange={e=>setCondensedAddTitle(e.target.value)}
+              onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();submitCondensedNestedTask();} if(e.key==="Escape"){setCondensedAddOpen(false);setCondensedAddTitle("");}}}
+              placeholder="New nested task"
+              style={{...sans,fontSize:12,color:C.ink,background:C.white,border:`1px solid ${C.line}`,borderRadius:6,padding:"4px 8px",outline:"none",width:220,maxWidth:"100%"}}
+            />
+            <button onClick={submitCondensedNestedTask} disabled={!condensedAddTitle.trim()} style={{...sans,fontSize:11,background:condensedAddTitle.trim()?C.ink:C.line2,color:C.white,border:"none",borderRadius:6,padding:"4px 8px",cursor:condensedAddTitle.trim()?"pointer":"default"}}>Add</button>
+            <button onClick={()=>{setCondensedAddOpen(false);setCondensedAddTitle("");}} style={{...sans,fontSize:11,background:"transparent",border:`1px solid ${C.line}`,borderRadius:6,padding:"4px 8px",cursor:"pointer",color:C.muted}}>Cancel</button>
+          </div>
+        )}
+        {item.subtasks?.length>0&&(
+          <div style={{marginLeft:16,display:"flex",flexDirection:"column",gap:1}}>
+            {item.subtasks.map(st=><div key={st.id} style={{...sans,fontSize:12,color:st.done?C.muted:C.ink2,textDecoration:st.done?"line-through":"none"}}>{st.label}</div>)}
+          </div>
+        )}
+        {isExpanded&&children.length>0&&(
+          <div style={{marginTop:2,display:"flex",flexDirection:"column",gap:2}}>
+            {sortItemsByMode(children,sortMode,items).map(child=><TreeItem key={child.id} item={child} items={items} allContexts={allContexts} allStatuses={allStatuses} depth={depth+1} onEdit={onEdit} onAdd={onAdd} onDelete={onDelete} onToggleSubtask={onToggleSubtask} expanded={expanded} onToggleExpand={onToggleExpand} onEditDoDate={onEditDoDate} onUpdate={onUpdate} onJumpTo={onJumpTo} onOpenProject={onOpenProject} sortMode={sortMode} condensed={condensed} onCreateNestedTask={onCreateNestedTask}/>) }
+          </div>
+        )}
+      </div>
+    );
+  }
 
   if(isProject){
     return(
@@ -728,7 +823,7 @@ function TreeItem({item,items,allContexts,allStatuses,depth,onEdit,onAdd,onDelet
         </div>
         {isExpanded&&children.length>0&&(
           <div style={{marginTop:6,marginLeft:depth*18+18,display:"flex",flexDirection:"column",gap:6}}>
-            {sortItemsByMode(children,sortMode,items).map(child=><TreeItem key={child.id} item={child} items={items} allContexts={allContexts} allStatuses={allStatuses} depth={depth+1} onEdit={onEdit} onAdd={onAdd} onDelete={onDelete} onToggleSubtask={onToggleSubtask} expanded={expanded} onToggleExpand={onToggleExpand} onEditDoDate={onEditDoDate} onUpdate={onUpdate} onJumpTo={onJumpTo} onOpenProject={onOpenProject} sortMode={sortMode}/>) }
+            {sortItemsByMode(children,sortMode,items).map(child=><TreeItem key={child.id} item={child} items={items} allContexts={allContexts} allStatuses={allStatuses} depth={depth+1} onEdit={onEdit} onAdd={onAdd} onDelete={onDelete} onToggleSubtask={onToggleSubtask} expanded={expanded} onToggleExpand={onToggleExpand} onEditDoDate={onEditDoDate} onUpdate={onUpdate} onJumpTo={onJumpTo} onOpenProject={onOpenProject} sortMode={sortMode} condensed={condensed} onCreateNestedTask={onCreateNestedTask}/>) }
             <button onClick={()=>onAdd(item.id)} style={{display:"block",width:"100%",padding:"6px 0",background:"transparent",border:`1px dashed ${C.line2}`,borderRadius:6,fontSize:12,color:C.muted,cursor:"pointer",...sans,textAlign:"center"}}>+ Add inside {item.title}</button>
           </div>
         )}
@@ -751,7 +846,7 @@ function TreeItem({item,items,allContexts,allStatuses,depth,onEdit,onAdd,onDelet
       </div>
       {isExpanded&&children.length>0&&(
         <div style={{marginTop:6,marginLeft:18,display:"flex",flexDirection:"column",gap:6}}>
-          {sortItemsByMode(children,sortMode,items).map(child=><TreeItem key={child.id} item={child} items={items} allContexts={allContexts} allStatuses={allStatuses} depth={depth+1} onEdit={onEdit} onAdd={onAdd} onDelete={onDelete} onToggleSubtask={onToggleSubtask} expanded={expanded} onToggleExpand={onToggleExpand} onEditDoDate={onEditDoDate} onUpdate={onUpdate} onJumpTo={onJumpTo} onOpenProject={onOpenProject} sortMode={sortMode}/>) }
+          {sortItemsByMode(children,sortMode,items).map(child=><TreeItem key={child.id} item={child} items={items} allContexts={allContexts} allStatuses={allStatuses} depth={depth+1} onEdit={onEdit} onAdd={onAdd} onDelete={onDelete} onToggleSubtask={onToggleSubtask} expanded={expanded} onToggleExpand={onToggleExpand} onEditDoDate={onEditDoDate} onUpdate={onUpdate} onJumpTo={onJumpTo} onOpenProject={onOpenProject} sortMode={sortMode} condensed={condensed} onCreateNestedTask={onCreateNestedTask}/>) }
         </div>
       )}
     </div>
@@ -772,18 +867,97 @@ function DoDateModal({item,onSave,onClose}){
   );
 }
 
-function ProjectPopup({projectId,items,allContexts,allStatuses,onClose,onEdit,onAdd,onDelete,onToggleSubtask,onEditDoDate,expanded,onToggleExpand,onUpdate,onJumpTo,projectPath,onOpenProject}){
+function ProjectPopup({projectId,items,allContexts,allStatuses,onClose,onEdit,onAdd,onDelete,onToggleSubtask,onEditDoDate,expanded,onToggleExpand,onUpdate,onJumpTo,projectPath,onOpenProject,onCreateTask}){
+  const [inlineOpen,setInlineOpen]=useState(false);
+  const [inlineTitle,setInlineTitle]=useState("");
+  const [inlineDescription,setInlineDescription]=useState("");
+  const [inlineDoDate,setInlineDoDate]=useState("");
+  const [inlineDueDate,setInlineDueDate]=useState("");
+  const [isFullscreen,setIsFullscreen]=useState(false);
+  const [isCondensedView,setIsCondensedView]=useState(false);
+  const [popupExpandedIds,setPopupExpandedIds]=useState(new Set([projectId]));
   const project=items.find(x=>x.id===projectId);
   if(!project)return null;
+
+  function getPopupExpandableIds(){
+    const ids=new Set([projectId]);
+    getDescendants(items,projectId).forEach(desc=>{
+      if(getChildren(items,desc.id).length>0) ids.add(desc.id);
+    });
+    return ids;
+  }
+
+  function resetInlineTaskForm(){
+    setInlineOpen(false);
+    setInlineTitle("");
+    setInlineDescription("");
+    setInlineDoDate("");
+    setInlineDueDate("");
+  }
+
+  function submitInlineTask(){
+    const title=(inlineTitle||"").trim();
+    if(!title)return;
+    onCreateTask?.({
+      id:nid(),
+      type:"task",
+      title,
+      description:(inlineDescription||"").trim(),
+      status:"actionable",
+      contexts:[],
+      parentId:projectId,
+      dueDate:inlineDueDate||null,
+      doDate:inlineDoDate||null,
+      priority:null,
+      size:"small",
+      waitingFor:"",
+      subtasks:[],
+    });
+    setInlineTitle("");
+    setInlineDescription("");
+    setInlineDoDate("");
+    setInlineDueDate("");
+  }
+
+  useEffect(()=>{
+    resetInlineTaskForm();
+  },[projectId]);
+
+  useEffect(()=>{
+    setIsFullscreen(false);
+    setIsCondensedView(false);
+    setPopupExpandedIds(getPopupExpandableIds());
+  },[projectId]);
+
   const pct=progressOf(items,projectId);
   const rolledDo=rollupDoDate(items,projectId);
-  const popupExpanded=new Set(expanded);
-  getDescendants(items,projectId).forEach(item=>popupExpanded.add(item.id));
-  popupExpanded.add(projectId);
+  const popupExpandableIds=getPopupExpandableIds();
+  const isPopupFullyExpanded=[...popupExpandableIds].every(id=>popupExpandedIds.has(id));
+  const popupExpanded=popupExpandedIds;
   const pathItems=(projectPath||[]).map(id=>items.find(x=>x.id===id)).filter(Boolean);
+  const modalPadding=isFullscreen?"8px":"20px 16px";
+  const modalBorderRadius=isFullscreen?10:16;
+  const modalWidth=isFullscreen?"min(1500px, calc(100vw - 16px))":"100%";
+  const modalMaxWidth=isFullscreen?"none":620;
+  const modalHeight=isFullscreen?"calc(100vh - 16px)":"auto";
+  const modalMaxHeight=isFullscreen?"none":"85vh";
+
+  function togglePopupExpand(id){
+    setPopupExpandedIds(prev=>{
+      const next=new Set(prev);
+      if(next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function setPopupExpandAll(shouldExpand){
+    setPopupExpandedIds(shouldExpand?popupExpandableIds:new Set([projectId]));
+  }
+
   return(
-    <div style={{position:"fixed",inset:0,zIndex:600,background:"rgba(0,0,0,0.35)",display:"flex",alignItems:"center",justifyContent:"center",padding:"20px 16px"}} onClick={e=>e.target===e.currentTarget&&onClose()}>
-      <div style={{background:C.white,border:`1px solid ${C.line}`,borderRadius:16,width:"100%",maxWidth:620,maxHeight:"85vh",display:"flex",flexDirection:"column",boxShadow:"0 20px 60px rgba(0,0,0,.2)",overflow:"hidden"}}>
+    <div style={{position:"fixed",inset:0,zIndex:600,background:"rgba(0,0,0,0.35)",display:"flex",alignItems:"center",justifyContent:"center",padding:modalPadding}} onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div style={{background:C.white,border:`1px solid ${C.line}`,borderRadius:modalBorderRadius,width:modalWidth,maxWidth:modalMaxWidth,height:modalHeight,maxHeight:modalMaxHeight,display:"flex",flexDirection:"column",boxShadow:"0 20px 60px rgba(0,0,0,.2)",overflow:"hidden"}}>
         <div style={{padding:"20px 24px 16px",borderBottom:`1px solid ${C.line}`,flexShrink:0}}>
           <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:10}}>
             <div style={{flex:1}}>
@@ -812,12 +986,51 @@ function ProjectPopup({projectId,items,allContexts,allStatuses,onClose,onEdit,on
               </div>
               {pct!==null&&<div style={{marginTop:10}}><ProgressBar pct={pct}/></div>}
             </div>
-            <div style={{display:"flex",gap:6,flexShrink:0}}><button onClick={()=>onEdit(project)} style={{...sans,fontSize:12,background:"transparent",border:`1px solid ${C.line}`,borderRadius:7,padding:"5px 12px",cursor:"pointer",color:C.ink2}}>Edit</button><button onClick={onClose} style={{background:"transparent",border:"none",color:C.muted,fontSize:22,cursor:"pointer",padding:0,lineHeight:1}}>×</button></div>
+            <div style={{display:"flex",gap:6,flexShrink:0}}>
+              <button onClick={()=>setPopupExpandAll(!isPopupFullyExpanded)} style={{...sans,fontSize:12,background:"transparent",border:`1px solid ${C.line}`,borderRadius:7,padding:"5px 10px",cursor:"pointer",color:C.ink2}}>{isPopupFullyExpanded?"Collapse All":"Expand All"}</button>
+              <button onClick={()=>setIsCondensedView(v=>!v)} style={{...sans,fontSize:12,background:isCondensedView?C.bg2:"transparent",border:`1px solid ${isCondensedView?C.ink:C.line}`,borderRadius:7,padding:"5px 10px",cursor:"pointer",color:isCondensedView?C.ink:C.ink2}}>{isCondensedView?"Detailed":"Condensed"}</button>
+              <button onClick={()=>setIsFullscreen(v=>!v)} style={{...sans,fontSize:12,background:"transparent",border:`1px solid ${C.line}`,borderRadius:7,padding:"5px 10px",cursor:"pointer",color:C.ink2}}>{isFullscreen?"Windowed":"Fullscreen"}</button>
+              <button onClick={()=>onEdit(project)} style={{...sans,fontSize:12,background:"transparent",border:`1px solid ${C.line}`,borderRadius:7,padding:"5px 12px",cursor:"pointer",color:C.ink2}}>Edit</button>
+              <button onClick={onClose} style={{background:"transparent",border:"none",color:C.muted,fontSize:22,cursor:"pointer",padding:0,lineHeight:1}}>×</button>
+            </div>
           </div>
         </div>
         <div style={{flex:1,overflowY:"auto",padding:"14px 20px",display:"flex",flexDirection:"column",gap:6}}>
-          {getChildren(items,projectId).map(child=><TreeItem key={child.id} item={child} items={items} allContexts={allContexts} allStatuses={allStatuses} depth={0} onEdit={onEdit} onAdd={onAdd} onDelete={onDelete} onToggleSubtask={onToggleSubtask} expanded={popupExpanded} onToggleExpand={onToggleExpand} onEditDoDate={onEditDoDate} onUpdate={onUpdate} onJumpTo={onJumpTo} onOpenProject={item=>onOpenProject?.(item.id)}/>)}
-          <button onClick={()=>onAdd(projectId)} style={{width:"100%",padding:"8px 0",marginTop:4,background:"transparent",border:`1px dashed ${C.line2}`,borderRadius:8,fontSize:12,color:C.muted,cursor:"pointer",...sans}}>+ Add task</button>
+          {getChildren(items,projectId).map(child=><TreeItem key={child.id} item={child} items={items} allContexts={allContexts} allStatuses={allStatuses} depth={0} onEdit={onEdit} onAdd={onAdd} onDelete={onDelete} onToggleSubtask={onToggleSubtask} expanded={popupExpanded} onToggleExpand={togglePopupExpand} onEditDoDate={onEditDoDate} onUpdate={onUpdate} onJumpTo={onJumpTo} onOpenProject={item=>onOpenProject?.(item.id)} condensed={isCondensedView} onCreateNestedTask={onCreateTask}/>) }
+          {!inlineOpen&&<button onClick={()=>setInlineOpen(true)} style={{width:"100%",padding:"8px 0",marginTop:4,background:"transparent",border:`1px dashed ${C.line2}`,borderRadius:8,fontSize:12,color:C.muted,cursor:"pointer",...sans}}>+ Add task</button>}
+          {inlineOpen&&(
+            <div style={{marginTop:4,border:`1px solid ${C.line}`,borderRadius:10,padding:12,display:"flex",flexDirection:"column",gap:8,background:C.bg}}>
+              <input
+                autoFocus
+                value={inlineTitle}
+                onChange={e=>setInlineTitle(e.target.value)}
+                onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();submitInlineTask();}}}
+                placeholder="What needs to be done?"
+                style={{...serif,fontSize:16,color:C.ink,background:C.white,border:`1px solid ${C.line}`,borderRadius:8,padding:"8px 10px",outline:"none",width:"100%",boxSizing:"border-box"}}
+              />
+              <textarea
+                value={inlineDescription}
+                onChange={e=>setInlineDescription(e.target.value)}
+                placeholder="Description (optional)..."
+                rows={2}
+                style={{...sans,fontSize:12,color:C.ink2,background:C.white,border:`1px solid ${C.line}`,borderRadius:8,padding:"7px 10px",outline:"none",width:"100%",resize:"vertical",boxSizing:"border-box"}}
+              />
+              <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                  <span style={{...mono,fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:1}}>Do</span>
+                  <input type="date" value={inlineDoDate} onChange={e=>setInlineDoDate(e.target.value)} style={{...mono,fontSize:12,color:C.ink,background:C.white,border:`1px solid ${C.line}`,borderRadius:6,padding:"4px 6px",outline:"none"}}/>
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                  <span style={{...mono,fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:1}}>Due</span>
+                  <input type="date" value={inlineDueDate} onChange={e=>setInlineDueDate(e.target.value)} style={{...mono,fontSize:12,color:C.ink,background:C.white,border:`1px solid ${C.line}`,borderRadius:6,padding:"4px 6px",outline:"none"}}/>
+                </div>
+                <div style={{display:"flex",gap:6,marginLeft:"auto"}}>
+                  <button onClick={resetInlineTaskForm} style={{...sans,fontSize:12,background:"transparent",border:`1px solid ${C.line}`,borderRadius:7,padding:"6px 10px",cursor:"pointer",color:C.muted}}>Cancel</button>
+                  <button onClick={submitInlineTask} disabled={!inlineTitle.trim()} style={{...sans,fontSize:12,background:inlineTitle.trim()?C.ink:C.line2,color:C.white,border:"none",borderRadius:7,padding:"6px 12px",cursor:inlineTitle.trim()?"pointer":"default",fontWeight:600}}>Add task</button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -1391,7 +1604,7 @@ export default function Focus({userId}){
       </div>
 
       {settingsOpen&&<SettingsModal contexts={contexts} statuses={statuses} onUpdateContext={updateContext} onDeleteContext={deleteContext} onAddContext={addContext2} onUpdateStatus={updateStatus} onDeleteStatus={deleteStatus} onAddStatus={addStatus} onClose={()=>setSettingsOpen(false)}/>}
-      {projectPopup&&<ProjectPopup projectId={projectPopup} items={visibleItems} allContexts={contexts} allStatuses={statuses} onClose={()=>{setProjectPopup(null);setProjectPopupPath([]);}} onEdit={item=>{setForm({item});setProjectPopup(null);setProjectPopupPath([]);}} onAdd={pid=>setForm({item:{type:"task",parentId:pid,subtasks:[],contexts:[]}})} onDelete={deleteItem} onToggleSubtask={toggleSubtask} onEditDoDate={item=>setDoDateModal(item)} expanded={expanded} onToggleExpand={toggleExpand} onUpdate={updateTask} onJumpTo={jumpTo} projectPath={projectPopupPath} onOpenProject={id=>openProjectPopup(id)}/>}
+      {projectPopup&&<ProjectPopup projectId={projectPopup} items={visibleItems} allContexts={contexts} allStatuses={statuses} onClose={()=>{setProjectPopup(null);setProjectPopupPath([]);}} onEdit={item=>{setForm({item});setProjectPopup(null);setProjectPopupPath([]);}} onAdd={pid=>setForm({item:{type:"task",parentId:pid,subtasks:[],contexts:[]}})} onDelete={deleteItem} onToggleSubtask={toggleSubtask} onEditDoDate={item=>setDoDateModal(item)} expanded={expanded} onToggleExpand={toggleExpand} onUpdate={updateTask} onJumpTo={jumpTo} projectPath={projectPopupPath} onOpenProject={id=>openProjectPopup(id)} onCreateTask={saveItem}/>} 
       {doDateModal&&<DoDateModal item={doDateModal} onSave={date=>saveDoDate(doDateModal,date)} onClose={()=>setDoDateModal(null)}/>}
       {form&&<ItemForm item={form.item} items={items} allContexts={contexts} allStatuses={statuses} onSave={saveItem} onClose={()=>setForm(null)} onAddContext={addContext}/>}
     </div>
