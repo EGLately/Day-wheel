@@ -839,49 +839,6 @@ function DashPanel({title,icon,items,allItems,allContexts,allStatuses,onEdit,onT
   );
 }
 
-function MilestonePanel({items,allContexts,allStatuses,onEdit,onEditDoDate,onUpdate,onOpenProject}){
-  const projects=items.filter(x=>x.type==="project"&&x.status!=="complete"&&x.status!=="someday");
-  const suppressOpenRef=useRef(false);
-  return(
-    <div style={{background:C.white,border:`1px solid ${C.line}`,borderRadius:12,display:"flex",flexDirection:"column",minHeight:200,overflow:"hidden"}}>
-      <div style={{padding:"14px 16px 12px",borderBottom:`1px solid ${C.line}`,display:"flex",alignItems:"center",gap:8}}>
-        <span style={{fontSize:14}}>◈</span>
-        <div style={{...mono,fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:1.2,fontWeight:600}}>Active Projects</div>
-        <span style={{...mono,fontSize:10,color:C.muted,marginLeft:"auto"}}>{projects.length}</span>
-      </div>
-      <div style={{flex:1,overflowY:"auto",padding:"10px 12px",display:"flex",flexDirection:"column",gap:6}}>
-        {projects.length===0?<div style={{...serifI,fontSize:14,color:C.muted,textAlign:"center",padding:"20px 0"}}>No active projects</div>:projects.map(item=>{
-          const pct=progressOf(items,item.id);
-          const rolledDo=rollupDoDate(items,item.id);
-          return(
-            <div key={item.id} onMouseDownCapture={e=>{suppressOpenRef.current=shouldSuppressCardOpenFromInlineEdit(e);}} onClick={e=>{if(suppressOpenRef.current||shouldSuppressOpenAfterInlineEditBlur()){suppressOpenRef.current=false;return;}if(!shouldHandleCardOpenClick(e))return;onOpenProject?.(item);}} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 12px",background:C.white,border:`1px solid ${C.line}`,borderRadius:10,cursor:"pointer"}}>
-              <div style={{width:18,flexShrink:0,marginTop:3,fontSize:12,color:C.muted,textAlign:"center"}}>◈</div>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{display:"flex",alignItems:"baseline",gap:6}}>
-                  <EditableText text={item.title} onSave={t=>onUpdate?onUpdate(item.id,{title:t}):onEdit&&onEdit({...item,title:t})} style={{...serif,fontSize:14,color:C.ink,flex:1}} />
-                </div>
-                <div style={{paddingLeft:18,marginTop:1}}>
-                  {item.description&&<div style={{...mono,fontSize:9,color:C.muted,lineHeight:1.4,marginBottom:3}}>{item.description}</div>}
-                  <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:3}}>
-                    <button onClick={()=>onEditDoDate(item)} style={{...mono,fontSize:10,cursor:"pointer",background:"transparent",border:"none",padding:0,color:C.muted,lineHeight:1}}>{item.doDate?`do ${fmtDate(item.doDate)}`:rolledDo?`do↑ ${fmtDate(rolledDo)}`:"set do"}</button>
-                    <span style={{color:C.line2,fontSize:10,lineHeight:1}}>·</span>
-                    <span style={{...mono,fontSize:10,color:C.muted,lineHeight:1}}>{item.dueDate?`due ${fmtDate(item.dueDate)}`:"no due"}</span>
-                  </div>
-                </div>
-                <div style={{display:"flex",gap:4,flexWrap:"wrap",marginTop:4,paddingLeft:18,alignItems:"center"}}>
-                  <StatusBadge status={item.status} waitingFor={item.waitingFor} small allStatuses={allStatuses}/>
-                </div>
-                {pct!==null&&<div style={{marginTop:8,paddingLeft:18}}><ProgressBar pct={pct}/></div>}
-              </div>
-              <button onClick={(e)=>{e.stopPropagation();onEdit(item);}} style={{background:"transparent",border:"none",color:C.muted,cursor:"pointer",fontSize:13,padding:0,marginTop:2}}>✎</button>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
 function SettingsModal({contexts,statuses,onUpdateContext,onDeleteContext,onAddContext,onUpdateStatus,onDeleteStatus,onAddStatus,onClose}){
   const[tab,setTab]=useState("contexts");
   const COLORS=["#a04040","#b07030","#4a6fa5","#7a6fa0","#6a9ea0","#5a9e7a","#a06a7c","#7a8fa8","#8b8378","#5a8a4a","#c9a84c","#b07030"];
@@ -1307,7 +1264,6 @@ export default function Focus({userId}){
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(280px, 1fr))",gap:16,alignItems:"start"}}>
             <DashPanel title="Actionable Today" icon="○" items={dashActionable} allItems={visibleItems} allContexts={contexts} allStatuses={statuses} onEdit={item=>setForm({item})} onToggleStatus={toggleStatus} onUpdate={updateTask} onJumpTo={jumpTo} emptyMsg="Nothing actionable today"/>
             <DashPanel title="Not Actionable Today" icon="◌" items={dashNotActionable} allItems={visibleItems} allContexts={contexts} allStatuses={statuses} onEdit={item=>setForm({item})} onToggleStatus={toggleStatus} onUpdate={updateTask} onJumpTo={jumpTo} emptyMsg="Nothing else today"/>
-            <MilestonePanel items={visibleItems} allContexts={contexts} allStatuses={statuses} onEdit={item=>setForm({item})} onEditDoDate={item=>setDoDateModal(item)} onUpdate={updateTask} onOpenProject={item=>openProjectPopup(item.id)} />
           </div>
         )}
         {view==="inbox"&&(
